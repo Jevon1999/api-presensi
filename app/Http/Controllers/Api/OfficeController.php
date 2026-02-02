@@ -9,7 +9,20 @@ use App\Models\Office;
 class OfficeController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * @OA\Get(
+     *     path="/api/offices",
+     *     tags={"Offices"},
+     *     summary="Get list of all offices",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized")
+     * )
      */
     public function index()
     {
@@ -24,7 +37,30 @@ class OfficeController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * @OA\Post(
+     *     path="/api/offices",
+     *     tags={"Offices"},
+     *     summary="Create a new office",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"code","name"},
+     *             @OA\Property(property="code", type="string", example="JKT"),
+     *             @OA\Property(property="name", type="string", example="Jakarta Office")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Office created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Office berhasil dibuat"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function store(Request $request)
     {
@@ -41,7 +77,28 @@ class OfficeController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * @OA\Get(
+     *     path="/api/offices/{id}",
+     *     tags={"Offices"},
+     *     summary="Get specific office with locations and members",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Office ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Office not found")
+     * )
      */
     public function show(Office $office)
     {
@@ -54,7 +111,38 @@ class OfficeController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * @OA\Put(
+     *     path="/api/offices/{id}",
+     *     tags={"Offices"},
+     *     summary="Update office details",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Office ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"code","name"},
+     *             @OA\Property(property="code", type="string", example="JKT"),
+     *             @OA\Property(property="name", type="string", example="Jakarta Office")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Office updated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Office berhasil diupdate"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Office not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function update(Request $request, Office $office)
     {
@@ -72,7 +160,29 @@ class OfficeController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * @OA\Delete(
+     *     path="/api/offices/{id}",
+     *     tags={"Offices"},
+     *     summary="Delete an office",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Office ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Office deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Office berhasil dihapus")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Office not found"),
+     *     @OA\Response(response=422, description="Cannot delete office with active members")
+     * )
      */
     public function destroy(Office $office)
     {

@@ -12,7 +12,48 @@ use Carbon\Carbon;
 class AttendanceController extends Controller
 {
     /**
-     * Display attendance list with filters
+     * @OA\Get(
+     *     path="/api/attendances",
+     *     tags={"Attendance"},
+     *     summary="Get attendance list with filters",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="date",
+     *         in="query",
+     *         description="Filter by date (Y-m-d format), defaults to today",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date", example="2026-02-02")
+     *     ),
+     *     @OA\Parameter(
+     *         name="member_id",
+     *         in="query",
+     *         description="Filter by member ID",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="status",
+     *         in="query",
+     *         description="Filter by attendance status",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"hadir", "izin", "sakit", "alpha"})
+     *     ),
+     *     @OA\Parameter(
+     *         name="office_id",
+     *         in="query",
+     *         description="Filter by office ID",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized")
+     * )
      */
     public function index(Request $request)
     {
@@ -51,7 +92,28 @@ class AttendanceController extends Controller
     }
 
     /**
-     * show specific attendance
+     * @OA\Get(
+     *     path="/api/attendances/{id}",
+     *     tags={"Attendance"},
+     *     summary="Get specific attendance record",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Attendance ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Attendance not found")
+     * )
      */
     public function show(Attendance $attendance)
     {
@@ -63,7 +125,33 @@ class AttendanceController extends Controller
     }
 
     /**
-     * check-in endpoint (dari bot WA atau manual)
+     * @OA\Post(
+     *     path="/api/attendances/check-in",
+     *     tags={"Attendance"},
+     *     summary="Check-in endpoint (public)",
+     *     description="Used by WhatsApp bot or manual check-in. Validates geofencing.",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"no_hp","latitude","longitude"},
+     *             @OA\Property(property="no_hp", type="string", example="+6281234567890"),
+     *             @OA\Property(property="latitude", type="number", format="float", example=-6.200050),
+     *             @OA\Property(property="longitude", type="number", format="float", example=106.816700)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Check-in successful",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Check-in berhasil!"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Already checked in"),
+     *     @OA\Response(response=403, description="Outside geofence area"),
+     *     @OA\Response(response=404, description="Member not found or inactive"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function checkIn(Request $request)
     {
@@ -157,7 +245,33 @@ class AttendanceController extends Controller
     }
 
     /**
-     * check-out endpoint
+     * @OA\Post(
+     *     path="/api/attendances/check-out",
+     *     tags={"Attendance"},
+     *     summary="Check-out endpoint (public)",
+     *     description="Used by WhatsApp bot or manual check-out. Validates geofencing and calculates working hours.",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"no_hp","latitude","longitude"},
+     *             @OA\Property(property="no_hp", type="string", example="+6281234567890"),
+     *             @OA\Property(property="latitude", type="number", format="float", example=-6.200050),
+     *             @OA\Property(property="longitude", type="number", format="float", example=106.816700)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Check-out successful",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Check-out berhasil!"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Not checked in yet or already checked out"),
+     *     @OA\Response(response=403, description="Outside geofence area"),
+     *     @OA\Response(response=404, description="Member not found or inactive"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function checkOut(Request $request)
     {
@@ -248,7 +362,41 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Admin: Reset attendance (create log)
+     * @OA\Put(
+     *     path="/api/attendances/{id}/reset",
+     *     tags={"Attendance"},
+     *     summary="Admin: Reset attendance record",
+     *     description="Allows admin to manually modify attendance records with logging",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Attendance ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"status","reason"},
+     *             @OA\Property(property="status", type="string", enum={"hadir", "izin", "sakit", "alpha"}, example="izin"),
+     *             @OA\Property(property="check_in_time", type="string", format="time", example="08:30"),
+     *             @OA\Property(property="check_out_time", type="string", format="time", example="17:00"),
+     *             @OA\Property(property="reason", type="string", example="Koreksi data kehadiran karena kesalahan input")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Attendance reset successful",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Attendance berhasil direset"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Attendance not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function reset(Request $request, Attendance $attendance)
     {
@@ -337,7 +485,52 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Get laporan/statistik kehadiran
+     * @OA\Get(
+     *     path="/api/attendances/report",
+     *     tags={"Attendance"},
+     *     summary="Get attendance report and statistics",
+     *     description="Generate attendance statistics for a date range with optional filters",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="start_date",
+     *         in="query",
+     *         description="Start date for report",
+     *         required=true,
+     *         @OA\Schema(type="string", format="date", example="2026-01-01")
+     *     ),
+     *     @OA\Parameter(
+     *         name="end_date",
+     *         in="query",
+     *         description="End date for report",
+     *         required=true,
+     *         @OA\Schema(type="string", format="date", example="2026-01-31")
+     *     ),
+     *     @OA\Parameter(
+     *         name="office_id",
+     *         in="query",
+     *         description="Filter by office ID",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="member_id",
+     *         in="query",
+     *         description="Filter by member ID",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="period", type="object"),
+     *             @OA\Property(property="statistics", type="object"),
+     *             @OA\Property(property="attendances", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function report(Request $request)
     {

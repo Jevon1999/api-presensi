@@ -37,8 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendances/report', [App\Http\Controllers\Api\AttendanceController::class, 'report']);
 });
 
-// public endpoints untuk bot WA - tidak perlu auth
+Route::middleware('bot.auth')->group(function () {
 Route::post('/attendances/check-in', [App\Http\Controllers\Api\AttendanceController::class, 'checkIn']);
 Route::post('/attendances/check-out', [App\Http\Controllers\Api\AttendanceController::class, 'checkOut']);
+});
 
 

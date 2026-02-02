@@ -9,7 +9,41 @@ use App\Models\Progress;
 class ProgressController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * @OA\Get(
+     *     path="/api/progress",
+     *     tags={"Progress"},
+     *     summary="Get list of progress records",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="member_id",
+     *         in="query",
+     *         description="Filter by member ID",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="start_date",
+     *         in="query",
+     *         description="Filter from start date",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date", example="2026-01-01")
+     *     ),
+     *     @OA\Parameter(
+     *         name="end_date",
+     *         in="query",
+     *         description="Filter to end date",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date", example="2026-01-31")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized")
+     * )
      */
     public function index(Request $request)
     {
@@ -33,7 +67,31 @@ class ProgressController extends Controller
 
 
     /**
-     * Store a newly created resource in storage.
+     * @OA\Post(
+     *     path="/api/progress",
+     *     tags={"Progress"},
+     *     summary="Create a new progress record",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"member_id","tanggal","description"},
+     *             @OA\Property(property="member_id", type="string", example="9d8a1234-5678-90ab-cdef-1234567890ab"),
+     *             @OA\Property(property="tanggal", type="string", format="date", example="2026-02-02"),
+     *             @OA\Property(property="description", type="string", example="Completed API documentation and testing")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Progress created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Progress berhasil dibuat"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=422, description="Validation error or progress already exists for this date")
+     * )
      */
     public function store(Request $request)
     {
@@ -60,7 +118,28 @@ class ProgressController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * @OA\Get(
+     *     path="/api/progress/{id}",
+     *     tags={"Progress"},
+     *     summary="Get specific progress record",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Progress ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Progress not found")
+     * )
      */
     public function show(Progress $progress)
     {
@@ -72,7 +151,37 @@ class ProgressController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * @OA\Put(
+     *     path="/api/progress/{id}",
+     *     tags={"Progress"},
+     *     summary="Update progress record",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Progress ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"description"},
+     *             @OA\Property(property="description", type="string", example="Updated: Completed API documentation and testing")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Progress updated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Progress berhasil diupdate"),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Progress not found"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
      */
     public function update(Request $request, Progress $progress)
     {
@@ -89,7 +198,28 @@ class ProgressController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * @OA\Delete(
+     *     path="/api/progress/{id}",
+     *     tags={"Progress"},
+     *     summary="Delete a progress record",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Progress ID",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Progress deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Progress berhasil dihapus")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Progress not found")
+     * )
      */
     public function destroy(Progress $progress)
     {
