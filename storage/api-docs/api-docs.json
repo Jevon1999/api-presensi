@@ -161,7 +161,7 @@
                     "Attendance"
                 ],
                 "summary": "Check-in endpoint (public)",
-                "description": "Used by WhatsApp bot or manual check-in. Validates geofencing.",
+                "description": "Used by WhatsApp bot or manual check-in. No geofencing required.",
                 "operationId": "cd659c287d106562fad023b8ad183d1c",
                 "requestBody": {
                     "required": true,
@@ -169,24 +169,12 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "no_hp",
-                                    "latitude",
-                                    "longitude"
+                                    "no_hp"
                                 ],
                                 "properties": {
                                     "no_hp": {
                                         "type": "string",
-                                        "example": "+6281234567890"
-                                    },
-                                    "latitude": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": -6.20005
-                                    },
-                                    "longitude": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": 106.8167
+                                        "example": "6281234567890"
                                     }
                                 },
                                 "type": "object"
@@ -217,14 +205,11 @@
                     "400": {
                         "description": "Already checked in"
                     },
-                    "403": {
-                        "description": "Outside geofence area"
-                    },
                     "404": {
                         "description": "Member not found or inactive"
                     },
                     "422": {
-                        "description": "Validation error"
+                        "description": "Validation error - invalid phone format"
                     }
                 }
             }
@@ -235,7 +220,7 @@
                     "Attendance"
                 ],
                 "summary": "Check-out endpoint (public)",
-                "description": "Used by WhatsApp bot or manual check-out. Validates geofencing and calculates working hours.",
+                "description": "Used by WhatsApp bot or manual check-out. Calculates working hours.",
                 "operationId": "3cdb7b994d68c55886732da1b8f8bb74",
                 "requestBody": {
                     "required": true,
@@ -243,24 +228,12 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "no_hp",
-                                    "latitude",
-                                    "longitude"
+                                    "no_hp"
                                 ],
                                 "properties": {
                                     "no_hp": {
                                         "type": "string",
-                                        "example": "+6281234567890"
-                                    },
-                                    "latitude": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": -6.20005
-                                    },
-                                    "longitude": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": 106.8167
+                                        "example": "6281234567890"
                                     }
                                 },
                                 "type": "object"
@@ -291,14 +264,11 @@
                     "400": {
                         "description": "Not checked in yet or already checked out"
                     },
-                    "403": {
-                        "description": "Outside geofence area"
-                    },
                     "404": {
                         "description": "Member not found or inactive"
                     },
                     "422": {
-                        "description": "Validation error"
+                        "description": "Validation error - invalid phone format"
                     }
                 }
             }

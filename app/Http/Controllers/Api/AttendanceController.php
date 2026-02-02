@@ -129,14 +129,12 @@ class AttendanceController extends Controller
      *     path="/api/attendances/check-in",
      *     tags={"Attendance"},
      *     summary="Check-in endpoint (public)",
-     *     description="Used by WhatsApp bot or manual check-in. Validates geofencing.",
+     *     description="Used by WhatsApp bot or manual check-in. No geofencing required.",
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"no_hp","latitude","longitude"},
-     *             @OA\Property(property="no_hp", type="string", example="+6281234567890"),
-     *             @OA\Property(property="latitude", type="number", format="float", example=-6.200050),
-     *             @OA\Property(property="longitude", type="number", format="float", example=106.816700)
+     *             required={"no_hp"},
+     *             @OA\Property(property="no_hp", type="string", example="6281234567890")
      *         )
      *     ),
      *     @OA\Response(
@@ -148,21 +146,21 @@ class AttendanceController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=400, description="Already checked in"),
-     *     @OA\Response(response=403, description="Outside geofence area"),
      *     @OA\Response(response=404, description="Member not found or inactive"),
-     *     @OA\Response(response=422, description="Validation error")
+     *     @OA\Response(response=422, description="Validation error - invalid phone format")
      * )
      */
     public function checkIn(Request $request)
     {
         $validated = $request->validate([
             'no_hp' => 'required|string',
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
         ]);
 
+        // Normalize phone number format
+        $phoneNumber = $this->normalizePhoneNumber($validated['no_hp']);
+
         // 1. cari member by no hp
-        $member = Member::where('no_hp', $validated['no_hp'])
+        $member = Member::where('no_hp', $phoneNumber)
             ->where('status_aktif', true)
             ->first();
 
@@ -190,24 +188,24 @@ class AttendanceController extends Controller
             }
         }
 
-        // 3. validasi geofencing
-        $validLocation = $this->validateGeofencing(
-            $validated['latitude'],
-            $validated['longitude'],
-            $member->office_id
-        );
+        // // 3. validasi geofencing
+        // $validLocation = $this->validateGeofencing(
+        //     $validated['latitude'],
+        //     $validated['longitude'],
+        //     $member->office_id
+        // );
 
-        if (!$validLocation) {
-            return response()->json([
-                'message' => 'Lokasi kamu di luar jangkauan kantor. Pastikan kamu berada di area kantor.',
-                'debug' => [
-                    'your_location' => [
-                        'lat' => $validated['latitude'],
-                        'lng' => $validated['longitude']
-                    ]
-                ]
-            ], 403);
-        }
+        // if (!$validLocation) {
+        //     return response()->json([
+        //         'message' => 'Lokasi kamu di luar jangkauan kantor. Pastikan kamu berada di area kantor.',
+        //         'debug' => [
+        //             'your_location' => [
+        //                 'lat' => $validated['latitude'],
+        //                 'lng' => $validated['longitude']
+        //             ]
+        //         ]
+        //     ], 403);
+        // }
 
         // 4. buat atau update attendance
         $checkInTime = now()->format('H:i:s');
@@ -249,14 +247,12 @@ class AttendanceController extends Controller
      *     path="/api/attendances/check-out",
      *     tags={"Attendance"},
      *     summary="Check-out endpoint (public)",
-     *     description="Used by WhatsApp bot or manual check-out. Validates geofencing and calculates working hours.",
+     *     description="Used by WhatsApp bot or manual check-out. Calculates working hours.",
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"no_hp","latitude","longitude"},
-     *             @OA\Property(property="no_hp", type="string", example="+6281234567890"),
-     *             @OA\Property(property="latitude", type="number", format="float", example=-6.200050),
-     *             @OA\Property(property="longitude", type="number", format="float", example=106.816700)
+     *             required={"no_hp"},
+     *             @OA\Property(property="no_hp", type="string", example="6281234567890")
      *         )
      *     ),
      *     @OA\Response(
@@ -268,21 +264,21 @@ class AttendanceController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=400, description="Not checked in yet or already checked out"),
-     *     @OA\Response(response=403, description="Outside geofence area"),
      *     @OA\Response(response=404, description="Member not found or inactive"),
-     *     @OA\Response(response=422, description="Validation error")
+     *     @OA\Response(response=422, description="Validation error - invalid phone format")
      * )
      */
     public function checkOut(Request $request)
     {
         $validated = $request->validate([
             'no_hp' => 'required|string',
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
         ]);
 
+        // Normalize phone number format
+        $phoneNumber = $this->normalizePhoneNumber($validated['no_hp']);
+
         // 1. cari member
-        $member = Member::where('no_hp', $validated['no_hp'])
+        $member = Member::where('no_hp', $phoneNumber)
             ->where('status_aktif', true)
             ->first();
 
@@ -319,18 +315,18 @@ class AttendanceController extends Controller
             ], 400);
         }
 
-        // 3. validasi geofencing
-        $validLocation = $this->validateGeofencing(
-            $validated['latitude'],
-            $validated['longitude'],
-            $member->office_id
-        );
+        // // 3. validasi geofencing
+        // $validLocation = $this->validateGeofencing(
+        //     $validated['latitude'],
+        //     $validated['longitude'],
+        //     $member->office_id
+        // );
 
-        if (!$validLocation) {
-            return response()->json([
-                'message' => 'Lokasi kamu di luar jangkauan kantor. Pastikan kamu berada di area kantor.'
-            ], 403);
-        }
+        // if (!$validLocation) {
+        //     return response()->json([
+        //         'message' => 'Lokasi kamu di luar jangkauan kantor. Pastikan kamu berada di area kantor.'
+        //     ], 403);
+        // }
 
         // 4. update attendance dengan waktu check-out
         $checkOutTime = now()->format('H:i:s');
@@ -432,56 +428,77 @@ class AttendanceController extends Controller
         ]);
     }
 
+    // /**
+    //  * Validate lokasi office geofence
+    //  */
+    // private function validateGeofencing($latitude, $longitude, $officeId)
+    // {
+    //     $locations = OfficeLocation::where('office_id', $officeId)
+    //         ->where('is_active', true)
+    //         ->get();
+
+    //     if ($locations->isEmpty()) {
+    //         // Tidak ada lokasi yang diset, izinkan check-in (untuk development)
+    //         return true;
+    //     }
+
+    //     foreach ($locations as $location) {
+    //         $distance = $this->calculateDistance(
+    //             $latitude,
+    //             $longitude,
+    //             $location->latitude,
+    //             $location->longitude
+    //         );
+
+    //         // Cek apakah dalam radius
+    //         if ($distance <= $location->radius_meters) {
+    //             return true;
+    //         }
+    //     }
+
+    //     return false;
+    // }
+
+    // /**
+    //  * kalkulasi jarak antara dua koordinat (haversine formula)
+    //  */
+    // private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    // {
+    //     $earthRadius = 6371000; // dalam meter
+
+    //     $dLat = deg2rad($lat2 - $lat1);
+    //     $dLon = deg2rad($lon2 - $lon1);
+
+    //     $a = sin($dLat / 2) * sin($dLat / 2) +
+    //          cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+    //          sin($dLon / 2) * sin($dLon / 2);
+
+    //     $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+    //     $distance = $earthRadius * $c;
+
+    //     return $distance; // dalam meter
+    // }
+
     /**
-     * Validate lokasi office geofence
+     * Normalize phone number format (convert +62 to 62, 08 to 628, etc)
      */
-    private function validateGeofencing($latitude, $longitude, $officeId)
+    private function normalizePhoneNumber($phoneNumber)
     {
-        $locations = OfficeLocation::where('office_id', $officeId)
-            ->where('is_active', true)
-            ->get();
-
-        if ($locations->isEmpty()) {
-            // Tidak ada lokasi yang diset, izinkan check-in (untuk development)
-            return true;
+        // Remove all non-digit characters (including +, -, spaces, etc)
+        $cleaned = preg_replace('/[^0-9]/', '', $phoneNumber);
+        
+        // If starts with 0, replace with 62
+        if (substr($cleaned, 0, 1) === '0') {
+            $cleaned = '62' . substr($cleaned, 1);
         }
-
-        foreach ($locations as $location) {
-            $distance = $this->calculateDistance(
-                $latitude,
-                $longitude,
-                $location->latitude,
-                $location->longitude
-            );
-
-            // Cek apakah dalam radius
-            if ($distance <= $location->radius_meters) {
-                return true;
-            }
+        
+        // If doesn't start with 62, add 62 prefix
+        if (substr($cleaned, 0, 2) !== '62') {
+            $cleaned = '62' . $cleaned;
         }
-
-        return false;
-    }
-
-    /**
-     * kalkulasi jarak antara dua koordinat (haversine formula)
-     */
-    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
-    {
-        $earthRadius = 6371000; // dalam meter
-
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon / 2) * sin($dLon / 2);
-
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-
-        $distance = $earthRadius * $c;
-
-        return $distance; // dalam meter
+        
+        return $cleaned;
     }
 
     /**
