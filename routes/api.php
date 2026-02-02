@@ -20,6 +20,8 @@ use App\Http\Controllers\Api\ProgressController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::post('/waha/webhook', [App\Http\Controllers\WahaWebhookController::class, 'handle']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/logout-all', [AuthController::class, 'logoutAll']);
