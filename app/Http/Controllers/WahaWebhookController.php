@@ -158,8 +158,6 @@ class WahaWebhookController extends Controller
             // Buat request object untuk attendance controller
             $attendanceRequest = new Request([
                 'no_hp' => $phone,
-                'latitude' => -7.8,
-                'longitude' => 110.3
             ]);
             
             // Panggil attendance controller langsung
@@ -207,8 +205,6 @@ class WahaWebhookController extends Controller
             // Buat request object untuk attendance controller
             $attendanceRequest = new Request([
                 'no_hp' => $phone,
-                'latitude' => -7.8,
-                'longitude' => 110.3
             ]);
             
             // Panggil attendance controller langsung
