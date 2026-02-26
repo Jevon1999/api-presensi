@@ -10,6 +10,8 @@ class Progress extends Model
 {
     use SoftDeletes, HasFactory;
 
+    protected $table = 'progresses';
+
     protected $fillable = [
         'member_id',
         'tanggal',
