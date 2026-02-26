@@ -78,7 +78,7 @@ INSERT INTO bot_configs (
     'http://localhost:3000',
     NULL,
     'default',
-    'http://localhost:8000/api/waha/webhook',
+    'https://api.globalintermedia.online/api/waha/webhook',
     NULL,
     '["message"]',
     1,
@@ -103,7 +103,7 @@ Daftarkan webhook URL ke WAHA:
 curl -X POST http://localhost:3000/api/webhooks \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "http://localhost:8000/api/waha/webhook",
+    "url": "https://api.globalintermedia.online/api/waha/webhook",
     "events": ["message"],
     "hmac": null,
     "retries": null,
@@ -111,9 +111,9 @@ curl -X POST http://localhost:3000/api/webhooks \
   }'
 ```
 
-**PENTING:** Jika Laravel berjalan di Docker juga, gunakan:
-- `http://host.docker.internal:8000/api/waha/webhook` (untuk Docker Desktop di Mac/Windows)
-- Atau gunakan IP address host machine
+**PENTING:** Jika Laravel dan WAHA sama-sama di VPS, webhook URL sudah benar.
+- Production: `https://api.globalintermedia.online/api/waha/webhook`
+- Local testing: `http://localhost:8000/api/waha/webhook`
 
 ### 5. Registrasi Member dengan Nomor HP
 
@@ -222,6 +222,25 @@ Bot: ✅ Check-out Berhasil!
 
 Test webhook secara manual:
 
+**Production:**
+```bash
+curl -X POST https://api.globalintermedia.online/api/waha/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "message",
+    "session": "default",
+    "payload": {
+      "id": "test123",
+      "timestamp": 1234567890,
+      "from": "6281234567890@c.us",
+      "fromMe": false,
+      "body": "masuk",
+      "hasMedia": false
+    }
+  }'
+```
+
+**Local:**
 ```bash
 curl -X POST http://localhost:8000/api/waha/webhook \
   -H "Content-Type: application/json" \

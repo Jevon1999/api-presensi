@@ -22,13 +22,13 @@ use Illuminate\Routing\Controller as BaseController;
  * )
  * 
  * @OA\Server(
- *     url="http://localhost:1337",
- *     description="Local Development Server"
+ *     url="https://api.globalintermedia.online",
+ *     description="Production Server"
  * )
  * 
  * @OA\Server(
- *     url="https://api.globalintermedia.online",
- *     description="Production Server"
+ *     url="http://localhost:1337",
+ *     description="Local Development Server"
  * )
  * 
  * @OA\SecurityScheme(
