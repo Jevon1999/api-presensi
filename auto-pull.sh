@@ -5,7 +5,7 @@
 # Checks for updates and pulls if available
 #######################################
 
-PROJECT_DIR="/var/www/api.globalintermedia.online"
+PROJECT_DIR="/var/www/html/api-presensi"
 LOG_FILE="$PROJECT_DIR/storage/logs/auto-pull.log"
 LOCK_FILE="$PROJECT_DIR/storage/auto-pull.lock"
 

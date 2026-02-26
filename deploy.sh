@@ -3,6 +3,7 @@
 #######################################
 # Auto Deployment Script
 # API Presensi PKL
+# Called by webhook or cron
 #######################################
 
 # Color output
@@ -12,7 +13,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Config
-PROJECT_DIR="/var/www/api.globalintermedia.online"
+PROJECT_DIR="/var/www/html/api-presensi"
 LOG_FILE="$PROJECT_DIR/storage/logs/deployment.log"
 
 # Function to log with timestamp
@@ -116,8 +117,8 @@ fi
 
 # Set correct permissions
 log "Setting file permissions..."
-chmod -R 775 storage bootstrap/cache
-chown -R www-data:www-data storage bootstrap/cache
+sudo chmod -R 775 storage bootstrap/cache 2>/dev/null || log_warning "Could not change some permissions (may be OK)"
+sudo chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || log_warning "Could not change ownership (may need sudo)"
 log_success "Permissions set"
 
 # Restart PHP-FPM

@@ -21,8 +21,9 @@ touch storage/logs/auto-pull.log
 
 # Set proper permissions
 echo "🔒 Setting proper permissions..."
-chmod -R 775 storage bootstrap/cache
-sudo chown -R www-data:www-data storage bootstrap/cache
+echo "   This requires sudo access..."
+sudo chmod -R 775 storage bootstrap/cache 2>/dev/null || echo "   ⚠️  Some files couldn't be changed (this is OK if owned by www-data)"
+sudo chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || echo "   ⚠️  Run with sudo for full permission setup"
 
 # Generate webhook secret
 echo ""
