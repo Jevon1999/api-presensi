@@ -22,12 +22,12 @@ use Illuminate\Routing\Controller as BaseController;
  * )
  * 
  * @OA\Server(
- *     url="http://localhost:8000",
+ *     url="http://localhost:1337",
  *     description="Local Development Server"
  * )
  * 
  * @OA\Server(
- *     url="https://api-production.example.com",
+ *     url="https://api.globalintermedia.online",
  *     description="Production Server"
  * )
  * 
