@@ -4,6 +4,9 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/logs/deployment.log
+/storage/logs/auto-pull.log
+/storage/*.lock
 /vendor
 .env
 .env.backup
