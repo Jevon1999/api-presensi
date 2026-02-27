@@ -79,12 +79,12 @@ Setiap office punya lokasi dengan geofencing radius.
 ### Login Test
 ```bash
 # Via curl
-curl -X POST https://api.globalintermedia.online/api/login \
+curl -X POST https://api.presensi.globalintermedia.online/api/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@test.com","password":"password"}'
 
 # Via Swagger UI
-https://api.globalintermedia.online/api/documentation
+https://api.presensi.globalintermedia.online/api/documentation
 ```
 
 ### Check Database

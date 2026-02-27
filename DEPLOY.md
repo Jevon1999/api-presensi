@@ -8,7 +8,7 @@ Simple auto-deployment untuk API Presensi PKL.
 
 ```bash
 # SSH ke VPS
-ssh pkl@api.globalintermedia.online
+ssh pkl@presensi.globalintermedia.online
 
 # Masuk ke project
 cd /var/www/html/api-presensi
@@ -32,7 +32,7 @@ WEBHOOK_SECRET=paste-secret-dari-setup
 
 1. Buka: https://github.com/Jevon1999/api-presensi/settings/hooks
 2. Add webhook:
-   - **Payload URL:** `https://api.globalintermedia.online/deploy-webhook.php`
+   - **Payload URL:** `https://api.presensi.globalintermedia.online/deploy-webhook.php`
    - **Content type:** `application/json`
    - **Secret:** Paste secret dari step 1
    - **Events:** Just the push event

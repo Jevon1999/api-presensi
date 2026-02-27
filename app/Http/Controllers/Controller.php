@@ -22,7 +22,7 @@ use Illuminate\Routing\Controller as BaseController;
  * )
  * 
  * @OA\Server(
- *     url="https://api.globalintermedia.online",
+ *     url="https://api.presensi.globalintermedia.online",
  *     description="Production Server"
  * )
  * 

@@ -20,7 +20,8 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'https://api.globalintermedia.online',
+        'https://api.presensi.globalintermedia.online',
+        'https://presensi.globalintermedia.online',
         'http://localhost:8000',
         'http://127.0.0.1:8000',
     ],
