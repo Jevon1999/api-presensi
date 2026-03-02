@@ -9,6 +9,8 @@ use App\Models\OfficeLocation;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
+use App\Models\BotConfig;
+
 class AttendanceController extends Controller
 {
     /**
@@ -154,6 +156,7 @@ class AttendanceController extends Controller
     {
         $validated = $request->validate([
             'no_hp' => 'required|string',
+            'late_reason' => 'nullable|string|max:500',
         ]);
 
         // Normalize phone number format
@@ -168,6 +171,20 @@ class AttendanceController extends Controller
             return response()->json([
                 'message' => 'Member tidak ditemukan atau tidak aktif'
             ], 404);
+        }
+
+        // 1b. Auto-check masa magang selesai
+        if ($member->tanggal_selesai_magang && now()->gt($member->tanggal_selesai_magang)) {
+            $member->update(['status_aktif' => false]);
+            
+            return response()->json([
+                'message' => 'Masa magang Anda telah selesai. Selamat untuk pencapaian Anda!',
+                'status' => 'completed',
+                'data' => [
+                    'nama' => $member->nama_lengkap,
+                    'tanggal_selesai' => $member->tanggal_selesai_magang->format('d/m/Y')
+                ]
+            ], 403);
         }
 
         // 2. cek apakah sudah check-in hari ini
@@ -210,23 +227,42 @@ class AttendanceController extends Controller
         // 4. buat atau update attendance
         $checkInTime = now()->format('H:i:s');
         
+        // 4b. Check if late based on bot config threshold
+        $botConfig = BotConfig::config();
+        $lateThreshold = $botConfig->check_in_late_threshold 
+            ? Carbon::parse($botConfig->check_in_late_threshold)->format('H:i:s')
+            : '09:00:00';
+        $isLate = $checkInTime > $lateThreshold;
+        
+        // If late and reason is required but not provided, return error
+        if ($isLate && $botConfig->require_late_reason && empty($validated['late_reason'])) {
+            return response()->json([
+                'message' => 'Kamu terlambat! Harap berikan alasan keterlambatan.',
+                'is_late' => true,
+                'require_reason' => true,
+                'threshold' => Carbon::parse($lateThreshold)->format('H:i'),
+            ], 422);
+        }
+        
+        $attendanceData = [
+            'check_in_time' => $checkInTime,
+            'status' => 'hadir',
+            'is_late' => $isLate,
+            'late_reason' => $isLate ? ($validated['late_reason'] ?? null) : null,
+        ];
+        
         if ($existingAttendance) {
-            $existingAttendance->update([
-                'check_in_time' => $checkInTime,
-                'status' => 'hadir'
-            ]);
+            $existingAttendance->update($attendanceData);
             $attendance = $existingAttendance;
         } else {
-            $attendance = Attendance::create([
+            $attendance = Attendance::create(array_merge([
                 'member_id' => $member->id,
                 'tanggal' => $today,
-                'check_in_time' => $checkInTime,
-                'status' => 'hadir',
-            ]);
+            ], $attendanceData));
         }
 
-        return response()->json([
-            'message' => 'Check-in berhasil!',
+        $responseData = [
+            'message' => $isLate ? 'Check-in berhasil! (Terlambat)' : 'Check-in berhasil!',
             'data' => [
                 'member' => [
                     'id' => $member->id,
@@ -236,10 +272,14 @@ class AttendanceController extends Controller
                 'attendance' => [
                     'tanggal' => $attendance->tanggal->format('d/m/Y'),
                     'check_in_time' => Carbon::parse($attendance->check_in_time)->format('H:i'),
-                    'status' => $attendance->status
+                    'status' => $attendance->status,
+                    'is_late' => $isLate,
+                    'late_reason' => $attendance->late_reason,
                 ]
             ]
-        ], 201);
+        ];
+
+        return response()->json($responseData, 201);
     }
 
     /**
@@ -286,6 +326,20 @@ class AttendanceController extends Controller
             return response()->json([
                 'message' => 'Member tidak ditemukan atau tidak aktif'
             ], 404);
+        }
+
+        // 1b. Auto-check masa magang selesai
+        if ($member->tanggal_selesai_magang && now()->gt($member->tanggal_selesai_magang)) {
+            $member->update(['status_aktif' => false]);
+            
+            return response()->json([
+                'message' => 'Masa magang Anda telah selesai. Selamat untuk pencapaian Anda!',
+                'status' => 'completed',
+                'data' => [
+                    'nama' => $member->nama_lengkap,
+                    'tanggal_selesai' => $member->tanggal_selesai_magang->format('d/m/Y')
+                ]
+            ], 403);
         }
 
         // 2. cari attendance hari ini

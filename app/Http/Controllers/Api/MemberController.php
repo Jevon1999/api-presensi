@@ -107,8 +107,8 @@ class MemberController extends Controller
      */
     public function store(Request $request)
     {
-        $validated =  $request->validate([
-            'no_hp' => 'required|string|nuique:members,no_hp|max:15',
+        $validated = $request->validate([
+            'no_hp' => 'required|string|unique:members,no_hp|max:15',
             'office_id' => 'required|exists:offices,id',
             'nama_lengkap' => 'required|string|max:255',
             'jenis_kelamin' => 'required|in:L,P',
@@ -124,10 +124,8 @@ class MemberController extends Controller
 
         return response()->json([
             'message' => 'Member berhasil dibuat',
-            'data' => $member
-        ], 201
-        );
-
+            'data' => $member,
+        ], 201);
     }
 
     /**
@@ -156,7 +154,13 @@ class MemberController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $member = Member::with(['office', 'creator'])->find($id);
+
+        if (!$member) {
+            return response()->json(['message' => 'Member tidak ditemukan'], 404);
+        }
+
+        return response()->json(['data' => $member]);
     }
 
     /**
@@ -200,7 +204,30 @@ class MemberController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+        $member = Member::find($id);
+
+        if (!$member) {
+            return response()->json(['message' => 'Member tidak ditemukan'], 404);
+        }
+
+        $validated = $request->validate([
+            'no_hp' => 'sometimes|required|string|unique:members,no_hp,' . $id . '|max:15',
+            'office_id' => 'sometimes|required|exists:offices,id',
+            'nama_lengkap' => 'sometimes|required|string|max:255',
+            'jenis_kelamin' => 'sometimes|required|in:L,P',
+            'asal_sekolah' => 'sometimes|required|string|max:255',
+            'tanggal_mulai_magang' => 'sometimes|required|date',
+            'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
+            'status_aktif' => 'boolean',
+        ]);
+
+        $member->update($validated);
+        $member->load('office');
+
+        return response()->json([
+            'message' => 'Member berhasil diupdate',
+            'data' => $member,
+        ]);
     }
 
     /**
@@ -229,6 +256,14 @@ class MemberController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $member = Member::find($id);
+
+        if (!$member) {
+            return response()->json(['message' => 'Member tidak ditemukan'], 404);
+        }
+
+        $member->delete();
+
+        return response()->json(['message' => 'Member berhasil dihapus']);
     }
 }

@@ -11,13 +11,14 @@ class Attendance extends Model
     use SoftDeletes, HasFactory;
 
     protected $fillable = [
-        'member_id', 'tanggal', 'check_in_time', 'check_out_time', 'status'
+        'member_id', 'tanggal', 'check_in_time', 'check_out_time', 'status', 'is_late', 'late_reason'
     ];
 
     protected $casts = [
         'tanggal' => 'date',
         'check_in_time' => 'datetime:H:i:s',
-        'check_out_time' => 'datetime:H:i:s'
+        'check_out_time' => 'datetime:H:i:s',
+        'is_late' => 'boolean'
     ];
 
     public function member() {

@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\OfficeController;
 use App\Http\Controllers\Api\ProgressController;
+use App\Http\Controllers\Api\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('offices', OfficeController::class);
     Route::apiResource('members', MemberController::class);
     Route::apiResource('progresses', ProgressController::class);
+    Route::apiResource('users', UserController::class);
 
     // attendance endpoints
     Route::get('/attendances', [App\Http\Controllers\Api\AttendanceController::class, 'index']);
