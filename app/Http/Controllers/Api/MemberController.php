@@ -124,6 +124,20 @@ class MemberController extends Controller
         ]);
 
         $validated['created_by'] = auth()->id();
+
+        // Normalize phone number to +62 format
+        if (!empty($validated['no_hp'])) {
+            $noHp = preg_replace('/[^\d+]/', '', $validated['no_hp']);
+            if (preg_match('/^08/', $noHp)) {
+                $noHp = '+62' . substr($noHp, 1);
+            } elseif (preg_match('/^628/', $noHp)) {
+                $noHp = '+' . $noHp;
+            } elseif (preg_match('/^8\d{8,}/', $noHp)) {
+                $noHp = '+62' . $noHp;
+            }
+            $validated['no_hp'] = $noHp;
+        }
+
         $member = Member::create($validated);
         $member->load('office');
 
@@ -225,6 +239,19 @@ class MemberController extends Controller
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
             'status_aktif' => 'boolean',
         ]);
+
+        // Normalize phone number to +62 format
+        if (!empty($validated['no_hp'])) {
+            $noHp = preg_replace('/[^\d+]/', '', $validated['no_hp']);
+            if (preg_match('/^08/', $noHp)) {
+                $noHp = '+62' . substr($noHp, 1);
+            } elseif (preg_match('/^628/', $noHp)) {
+                $noHp = '+' . $noHp;
+            } elseif (preg_match('/^8\d{8,}/', $noHp)) {
+                $noHp = '+62' . $noHp;
+            }
+            $validated['no_hp'] = $noHp;
+        }
 
         $member->update($validated);
         $member->load('office');

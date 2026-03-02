@@ -41,9 +41,20 @@ class MemberApplicationController extends Controller
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
         ]);
 
+        // Normalize phone number to +62 format
+        $noHp = $request->no_hp;
+        $noHp = preg_replace('/[^\d+]/', '', $noHp);
+        if (preg_match('/^08/', $noHp)) {
+            $noHp = '+62' . substr($noHp, 1);
+        } elseif (preg_match('/^628/', $noHp)) {
+            $noHp = '+' . $noHp;
+        } elseif (preg_match('/^8\d{8,}/', $noHp)) {
+            $noHp = '+62' . $noHp;
+        }
+
         $member = Member::create([
             'user_id' => $user->id,
-            'no_hp' => $request->no_hp,
+            'no_hp' => $noHp,
             'office_id' => $request->office_id,
             'nama_lengkap' => $user->name,
             'jenis_kelamin' => $request->jenis_kelamin,
@@ -102,7 +113,16 @@ class MemberApplicationController extends Controller
             'rejection_reason' => null,
         ]);
 
-        $member->load(['office:id,name', 'user:id,name,email']);
+        $member->refresh();
+
+        try {
+            $member->load(['office:id,name']);
+            if ($member->user_id) {
+                $member->load(['user:id,name,email']);
+            }
+        } catch (\Exception $e) {
+            // Relationship load failed, but data is saved
+        }
 
         return response()->json([
             'message' => 'Member berhasil disetujui.',
@@ -135,6 +155,8 @@ class MemberApplicationController extends Controller
             'status_aktif' => false,
             'rejection_reason' => $request->rejection_reason,
         ]);
+
+        $member->refresh();
 
         return response()->json([
             'message' => 'Pengajuan ditolak.',
