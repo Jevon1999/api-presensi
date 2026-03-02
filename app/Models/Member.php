@@ -11,6 +11,7 @@ class Member extends Model
     use SoftDeletes, HasFactory;
 
     protected $fillable = [
+        'user_id',
         'no_hp',
         'office_id',
         'nama_lengkap',
@@ -19,6 +20,8 @@ class Member extends Model
         'tanggal_mulai_magang',
         'tanggal_selesai_magang',
         'status_aktif',
+        'status',
+        'rejection_reason',
         'created_by',
     ];
 
@@ -42,6 +45,10 @@ class Member extends Model
 
     public function creator() {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function user() {
+        return $this->belongsTo(User::class);
     }
 
 

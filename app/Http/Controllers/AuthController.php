@@ -5,10 +5,62 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\Member;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+
+    /**
+     * @OA\Post(
+     *     path="/api/register",
+     *     tags={"Authentication"},
+     *     summary="Register a new user account",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name","email","password","password_confirmation"},
+     *             @OA\Property(property="name", type="string", example="John Doe"),
+     *             @OA\Property(property="email", type="string", format="email", example="john@example.com"),
+     *             @OA\Property(property="password", type="string", format="password", example="password123"),
+     *             @OA\Property(property="password_confirmation", type="string", format="password", example="password123")
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Registration successful"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function register(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => $request->password,
+            'role' => 'user',
+            'is_active' => true,
+        ]);
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Registrasi berhasil',
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'member' => null,
+        ], 201);
+    }
 
 /**
      * @OA\Post(
@@ -64,6 +116,24 @@ class AuthController extends Controller
 
     $token = $user->createToken('auth_token')->plainTextToken;
 
+    // Load member data for role-based routing
+    $member = null;
+    if ($user->role === 'user') {
+        $memberRecord = Member::where('user_id', $user->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->with('office:id,name')
+            ->first();
+        if ($memberRecord) {
+            $member = [
+                'id' => $memberRecord->id,
+                'nama_lengkap' => $memberRecord->nama_lengkap,
+                'status' => $memberRecord->status,
+                'status_aktif' => $memberRecord->status_aktif,
+                'office' => $memberRecord->office,
+            ];
+        }
+    }
+
     return response()->json([
         'message' => 'Login berhasil',
         'access_token' => $token,
@@ -73,7 +143,8 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
-        ]
+        ],
+        'member' => $member,
     ]);
     }
 
@@ -123,8 +194,33 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
+        $user = $request->user();
+        $member = null;
+
+        if ($user->role === 'user') {
+            $memberRecord = Member::where('user_id', $user->id)
+                ->whereIn('status', ['pending', 'approved'])
+                ->with('office:id,name')
+                ->first();
+            if ($memberRecord) {
+                $member = [
+                    'id' => $memberRecord->id,
+                    'nama_lengkap' => $memberRecord->nama_lengkap,
+                    'status' => $memberRecord->status,
+                    'status_aktif' => $memberRecord->status_aktif,
+                    'office' => $memberRecord->office,
+                ];
+            }
+        }
+
         return response()->json([
-            'user' => $request->user()
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'member' => $member,
         ]);
     }
 

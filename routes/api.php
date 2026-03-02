@@ -8,6 +8,9 @@ use App\Http\Controllers\Api\OfficeController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\UserController;
 
+use App\Http\Controllers\Api\MemberApplicationController;
+use App\Http\Controllers\Api\MemberDashboardController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -20,6 +23,7 @@ use App\Http\Controllers\Api\UserController;
 */
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 
 Route::post('/waha/webhook', [App\Http\Controllers\WahaWebhookController::class, 'handle']);
 
@@ -27,6 +31,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/logout-all', [AuthController::class, 'logoutAll']);
     Route::get('/me',[AuthController::class, 'me']);
+
+    // Member application (for role=user)
+    Route::post('/member/apply', [MemberApplicationController::class, 'apply']);
+    Route::get('/member/my-status', [MemberApplicationController::class, 'myStatus']);
+
+    // Member own dashboard (for approved members)
+    Route::get('/member/dashboard', [MemberDashboardController::class, 'dashboard']);
+    Route::get('/member/progress', [MemberDashboardController::class, 'progress']);
+    Route::get('/member/report', [MemberDashboardController::class, 'report']);
+
+    // Admin: approve/reject member applications
+    Route::put('/members/{id}/approve', [MemberApplicationController::class, 'approve']);
+    Route::put('/members/{id}/reject', [MemberApplicationController::class, 'reject']);
 
     //crud resources
     Route::apiResource('offices', OfficeController::class);

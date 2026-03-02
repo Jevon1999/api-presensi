@@ -59,6 +59,11 @@ class MemberController extends Controller
             $query->where('status_aktif', $request->status_aktif);
         }
 
+        //filter by application status (pending/approved/rejected)
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
         //search
         if ($request->has('search')) {
             $search = $request->search;
