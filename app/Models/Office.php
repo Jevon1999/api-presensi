@@ -19,6 +19,10 @@ class Office extends Model
         return $this->hasMany(OfficeLocation::class);
     }
 
+    public function locations() {
+        return $this->hasMany(OfficeLocation::class);
+    }
+
     public function members() {
         return $this->hasMany(Member::class);
     }
