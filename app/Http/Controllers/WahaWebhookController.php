@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use App\Models\Member;
 use App\Models\Attendance;
 use App\Models\BotConfig;
+use App\Models\Permission;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -87,6 +88,7 @@ class WahaWebhookController extends Controller
      */
     private function processCommand($message, $phoneNumber, $config)
     {
+        $originalMessage = $message;
         $message = strtolower($message);
 
         // Check-in commands
@@ -102,6 +104,18 @@ class WahaWebhookController extends Controller
         // Status command
         if (in_array($message, ['status', 'cek', 'info'])) {
             return $this->handleStatus($phoneNumber);
+        }
+
+        // Izin (permission) command - format: izin [alasan]
+        if (preg_match('/^izin\s*(.*)$/i', $originalMessage, $matches)) {
+            $reason = trim($matches[1]);
+            return $this->handleIzin($phoneNumber, $reason, $config);
+        }
+
+        // Sakit (sick) command - format: sakit [keterangan]
+        if (preg_match('/^sakit\s*(.*)$/i', $originalMessage, $matches)) {
+            $reason = trim($matches[1]);
+            return $this->handleSakit($phoneNumber, $reason, $config);
         }
 
         // Help command
@@ -144,10 +158,24 @@ class WahaWebhookController extends Controller
         // Create or update attendance
         $checkInTime = now()->format('H:i:s');
         
+        // Check if late
+        $isLate = false;
+        $lateMessage = "";
+        if ($config->check_in_late_threshold) {
+            $lateThreshold = Carbon::parse($config->check_in_late_threshold);
+            $currentTime = Carbon::parse($checkInTime);
+            if ($currentTime->gt($lateThreshold)) {
+                $isLate = true;
+                $thresholdFormatted = $lateThreshold->format('H:i');
+                $lateMessage = "\n\n⚠️ *Kamu terlambat!* Batas check-in adalah {$thresholdFormatted} WIB.";
+            }
+        }
+        
         if ($attendance) {
             $attendance->update([
                 'check_in_time' => $checkInTime,
-                'status' => 'hadir'
+                'status' => 'hadir',
+                'is_late' => $isLate
             ]);
         } else {
             $attendance = Attendance::create([
@@ -155,6 +183,7 @@ class WahaWebhookController extends Controller
                 'tanggal' => $today,
                 'check_in_time' => $checkInTime,
                 'status' => 'hadir',
+                'is_late' => $isLate
             ]);
         }
 
@@ -163,8 +192,11 @@ class WahaWebhookController extends Controller
         $message .= "Nama: *{$member->nama_lengkap}*\n";
         $message .= "Kantor: *{$member->office->name}*\n";
         $message .= "Waktu: *{$formattedTime}* WIB\n";
-        $message .= "Tanggal: " . now()->format('d/m/Y') . "\n\n";
-        $message .= "Selamat bekerja! 💪";
+        $message .= "Tanggal: " . now()->format('d/m/Y');
+        $message .= $lateMessage;
+        if (!$isLate) {
+            $message .= "\n\nSelamat bekerja! 💪";
+        }
 
         return $message;
     }
@@ -249,12 +281,34 @@ class WahaWebhookController extends Controller
         $message .= "Kantor: *{$member->office->name}*\n";
         $message .= "Tanggal: " . now()->format('d/m/Y') . "\n\n";
 
-        if (!$attendance || !$attendance->check_in_time) {
+        if (!$attendance) {
+            $message .= "Status: ❌ *Belum Check-in*\n\n";
+            $message .= "Silakan ketik *masuk* untuk check-in.";
+        } elseif ($attendance->status === 'izin') {
+            $permission = Permission::where('attendance_id', $attendance->id)->first();
+            $message .= "Status: 📋 *Izin*\n";
+            if ($permission) {
+                $message .= "Alasan: {$permission->reason}\n";
+            }
+        } elseif ($attendance->status === 'sakit') {
+            $permission = Permission::where('attendance_id', $attendance->id)->first();
+            $message .= "Status: 🏥 *Sakit*\n";
+            if ($permission) {
+                $message .= "Keterangan: {$permission->reason}\n";
+            }
+            $message .= "\nSemoga lekas sembuh! 🙏";
+        } elseif (!$attendance->check_in_time) {
             $message .= "Status: ❌ *Belum Check-in*\n\n";
             $message .= "Silakan ketik *masuk* untuk check-in.";
         } else {
             $checkInTime = Carbon::parse($attendance->check_in_time)->format('H:i');
-            $message .= "✅ Check-in: *{$checkInTime}* WIB\n";
+            $message .= "✅ Check-in: *{$checkInTime}* WIB";
+            
+            // Show if late
+            if ($attendance->is_late) {
+                $message .= " ⚠️ (Terlambat)";
+            }
+            $message .= "\n";
 
             if ($attendance->check_out_time) {
                 $checkOutTime = Carbon::parse($attendance->check_out_time)->format('H:i');
@@ -286,8 +340,144 @@ class WahaWebhookController extends Controller
         $message .= "🟢 *masuk* - Check-in kehadiran\n";
         $message .= "🔴 *keluar* - Check-out kehadiran\n";
         $message .= "📊 *status* - Cek status kehadiran hari ini\n";
+        $message .= "📋 *izin [alasan]* - Ajukan izin tidak hadir\n";
+        $message .= "🏥 *sakit [keterangan]* - Lapor sakit\n";
         $message .= "❓ *help* - Tampilkan menu bantuan ini\n\n";
         $message .= "_Tips: Kamu juga bisa menggunakan perintah: checkin, checkout, absen, pulang, cek, info_";
+
+        return $message;
+    }
+
+    /**
+     * Handle izin (permission) request
+     */
+    private function handleIzin($phoneNumber, $reason, $config)
+    {
+        $normalized = $this->normalizePhoneNumber($phoneNumber);
+
+        // Find member
+        $member = Member::where('no_hp', $normalized)
+            ->where('status_aktif', true)
+            ->first();
+
+        if (!$member) {
+            return "Maaf, nomor HP kamu belum terdaftar atau tidak aktif. 😔\n\nSilakan hubungi admin untuk registrasi.";
+        }
+
+        // Check if reason is provided
+        if (empty($reason)) {
+            return "⚠️ *Format Izin Salah*\n\nSilakan ketik dengan format:\n*izin [alasan]*\n\nContoh: izin ada keperluan keluarga";
+        }
+
+        $today = now()->format('Y-m-d');
+        
+        // Check if already have attendance today
+        $attendance = Attendance::where('member_id', $member->id)
+            ->where('tanggal', $today)
+            ->first();
+
+        if ($attendance && $attendance->check_in_time) {
+            return "Halo *{$member->nama_lengkap}* 👋\n\nKamu sudah check-in hari ini, tidak bisa mengajukan izin.\n\nJika perlu pulang lebih awal, silakan check-out dengan mengetik *keluar*.";
+        }
+
+        // Check if already have izin/sakit today
+        if ($attendance && in_array($attendance->status, ['izin', 'sakit'])) {
+            $statusText = $attendance->status === 'izin' ? 'izin' : 'sakit';
+            return "Halo *{$member->nama_lengkap}* 👋\n\nKamu sudah mengajukan {$statusText} hari ini.";
+        }
+
+        // Create or update attendance with izin status
+        if ($attendance) {
+            $attendance->update([
+                'status' => 'izin'
+            ]);
+        } else {
+            $attendance = Attendance::create([
+                'member_id' => $member->id,
+                'tanggal' => $today,
+                'status' => 'izin',
+            ]);
+        }
+
+        // Create permission record
+        Permission::create([
+            'attendance_id' => $attendance->id,
+            'reason' => $reason,
+            'type' => 'izin'
+        ]);
+
+        $message = "📋 *Izin Tercatat!*\n\n";
+        $message .= "Nama: *{$member->nama_lengkap}*\n";
+        $message .= "Tanggal: " . now()->format('d/m/Y') . "\n";
+        $message .= "Alasan: {$reason}\n\n";
+        $message .= "Izin kamu sudah tercatat. Semoga urusanmu lancar! 🙏";
+
+        return $message;
+    }
+
+    /**
+     * Handle sakit (sick) request
+     */
+    private function handleSakit($phoneNumber, $reason, $config)
+    {
+        $normalized = $this->normalizePhoneNumber($phoneNumber);
+
+        // Find member
+        $member = Member::where('no_hp', $normalized)
+            ->where('status_aktif', true)
+            ->first();
+
+        if (!$member) {
+            return "Maaf, nomor HP kamu belum terdaftar atau tidak aktif. 😔\n\nSilakan hubungi admin untuk registrasi.";
+        }
+
+        // Check if reason is provided
+        if (empty($reason)) {
+            return "⚠️ *Format Sakit Salah*\n\nSilakan ketik dengan format:\n*sakit [keterangan]*\n\nContoh: sakit demam";
+        }
+
+        $today = now()->format('Y-m-d');
+        
+        // Check if already have attendance today
+        $attendance = Attendance::where('member_id', $member->id)
+            ->where('tanggal', $today)
+            ->first();
+
+        if ($attendance && $attendance->check_in_time) {
+            return "Halo *{$member->nama_lengkap}* 👋\n\nKamu sudah check-in hari ini. Jika perlu pulang karena sakit, silakan check-out dengan mengetik *keluar*.";
+        }
+
+        // Check if already have izin/sakit today
+        if ($attendance && in_array($attendance->status, ['izin', 'sakit'])) {
+            $statusText = $attendance->status === 'izin' ? 'izin' : 'sakit';
+            return "Halo *{$member->nama_lengkap}* 👋\n\nKamu sudah mengajukan {$statusText} hari ini.";
+        }
+
+        // Create or update attendance with sakit status
+        if ($attendance) {
+            $attendance->update([
+                'status' => 'sakit'
+            ]);
+        } else {
+            $attendance = Attendance::create([
+                'member_id' => $member->id,
+                'tanggal' => $today,
+                'status' => 'sakit',
+            ]);
+        }
+
+        // Create permission record
+        Permission::create([
+            'attendance_id' => $attendance->id,
+            'reason' => $reason,
+            'type' => 'sakit'
+        ]);
+
+        $message = "🏥 *Laporan Sakit Tercatat!*\n\n";
+        $message .= "Nama: *{$member->nama_lengkap}*\n";
+        $message .= "Tanggal: " . now()->format('d/m/Y') . "\n";
+        $message .= "Keterangan: {$reason}\n\n";
+        $message .= "Semoga lekas sembuh! 🙏💪";
 
         return $message;
     }
