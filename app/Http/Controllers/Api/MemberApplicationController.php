@@ -37,6 +37,7 @@ class MemberApplicationController extends Controller
             'office_id' => 'required|exists:offices,id',
             'jenis_kelamin' => 'required|in:L,P',
             'asal_sekolah' => 'required|string|max:255',
+            'jurusan' => 'nullable|string|max:255',
             'tanggal_mulai_magang' => 'required|date',
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
         ]);
@@ -59,6 +60,7 @@ class MemberApplicationController extends Controller
             'nama_lengkap' => $user->name,
             'jenis_kelamin' => $request->jenis_kelamin,
             'asal_sekolah' => $request->asal_sekolah,
+            'jurusan' => $request->jurusan,
             'tanggal_mulai_magang' => $request->tanggal_mulai_magang,
             'tanggal_selesai_magang' => $request->tanggal_selesai_magang,
             'status_aktif' => false,

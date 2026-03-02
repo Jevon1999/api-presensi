@@ -17,6 +17,7 @@ class Member extends Model
         'nama_lengkap',
         'jenis_kelamin',
         'asal_sekolah',
+        'jurusan',
         'tanggal_mulai_magang',
         'tanggal_selesai_magang',
         'status_aktif',
