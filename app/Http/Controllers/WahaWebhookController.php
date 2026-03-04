@@ -24,8 +24,8 @@ class WahaWebhookController extends Controller
             $event = $request->input('event');
             $payload = $request->input('payload');
 
-            // Only process message events (support both 'message' and 'message.any')
-            if (!in_array($event, ['message', 'message.any'])) {
+            // Only process 'message' event (ignore 'message.any' to prevent duplicate processing)
+            if ($event !== 'message') {
                 return response()->json(['status' => 'ignored', 'reason' => 'not a message event']);
             }
 
