@@ -338,17 +338,31 @@ class WahaWebhookController extends Controller
      */
     private function handleHelp($config)
     {
-        $greeting = $config->message_greeting ?: "Halo! 👋 Selamat datang di Bot Presensi.\n\n";
+        $message = "👋 *Halo! Selamat datang di Bot Presensi*\n";
+        $message .= "━━━━━━━━━━━━━━━━━━━━━\n\n";
         
-        $message = $greeting;
-        $message .= "📝 *Daftar Perintah:*\n\n";
-        $message .= "🟢 *masuk* - Check-in kehadiran\n";
-        $message .= "🔴 *keluar* - Check-out kehadiran\n";
-        $message .= "📊 *status* - Cek status kehadiran hari ini\n";
-        $message .= "📋 *izin [alasan]* - Ajukan izin tidak hadir\n";
-        $message .= "🏥 *sakit [keterangan]* - Lapor sakit\n";
-        $message .= "❓ *help* - Tampilkan menu bantuan ini\n\n";
-        $message .= "_Tips: Kamu juga bisa menggunakan perintah: checkin, checkout, absen, pulang, cek, info_";
+        $message .= "📝 *DAFTAR PERINTAH*\n\n";
+        
+        $message .= "🟢 *masuk*\n";
+        $message .= "    └ Check-in kehadiran\n\n";
+        
+        $message .= "🔴 *keluar*\n";
+        $message .= "    └ Check-out kehadiran\n\n";
+        
+        $message .= "📊 *status*\n";
+        $message .= "    └ Cek status kehadiran hari ini\n\n";
+        
+        $message .= "📋 *izin* _[alasan]_\n";
+        $message .= "    └ Ajukan izin tidak hadir\n\n";
+        
+        $message .= "🏥 *sakit* _[keterangan]_\n";
+        $message .= "    └ Lapor sakit\n\n";
+        
+        $message .= "❓ *help*\n";
+        $message .= "    └ Tampilkan menu ini\n\n";
+        
+        $message .= "━━━━━━━━━━━━━━━━━━━━━\n";
+        $message .= "💡 *Alias:* _checkin, checkout, absen, pulang, cek, info_";
 
         return $message;
     }
