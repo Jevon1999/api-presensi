@@ -590,7 +590,7 @@ class WahaWebhookController extends Controller
     }
 
     /**
-     * Normalize phone number to international format (62xxx)
+     * Normalize phone number to international format (+62xxx)
      */
     private function normalizePhoneNumber($phoneNumber)
     {
@@ -607,6 +607,7 @@ class WahaWebhookController extends Controller
             $cleaned = '62' . $cleaned;
         }
         
-        return $cleaned;
+        // Return with + prefix to match database format
+        return '+' . $cleaned;
     }
 }
