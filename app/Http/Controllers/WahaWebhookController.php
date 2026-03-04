@@ -39,6 +39,11 @@ class WahaWebhookController extends Controller
                 return response()->json(['status' => 'ignored', 'reason' => 'group message']);
             }
 
+            // Ignore status/story broadcasts
+            if (isset($payload['from']) && strpos($payload['from'], 'status@broadcast') !== false) {
+                return response()->json(['status' => 'ignored', 'reason' => 'status broadcast']);
+            }
+
             $from = $payload['from'] ?? null;
             $messageBody = trim($payload['body'] ?? '');
 
