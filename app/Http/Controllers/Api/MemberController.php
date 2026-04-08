@@ -132,6 +132,11 @@ class MemberController extends Controller
         ]);
 
         $validated['created_by'] = auth()->id();
+        // Admin yang tambah member manual langsung approved & aktif
+        $validated['status'] = 'approved';
+        if (!isset($validated['status_aktif'])) {
+            $validated['status_aktif'] = true;
+        }
 
         // Normalize phone number to +62 format
         if (!empty($validated['no_hp'])) {
