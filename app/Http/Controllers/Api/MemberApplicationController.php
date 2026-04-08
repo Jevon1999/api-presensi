@@ -94,6 +94,21 @@ class MemberApplicationController extends Controller
     }
 
     /**
+     * Get count of pending member applications.
+     */
+    public function pendingCount(Request $request)
+    {
+        $admin = $request->user();
+        if ($admin->role !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $count = Member::where('status', 'pending')->count();
+
+        return response()->json(['count' => $count]);
+    }
+
+    /**
      * Admin approves a pending member application.
      */
     public function approve(Request $request, $id)
@@ -149,7 +164,7 @@ class MemberApplicationController extends Controller
         }
 
         $request->validate([
-            'rejection_reason' => 'nullable|string|max:500',
+            'rejection_reason' => 'required|string|max:500',
         ]);
 
         $member->update([

@@ -49,6 +49,14 @@ class Kernel extends ConsoleKernel
                     ->runInBackground();
             }
         }
+        
+        // Deactivate expired members (run daily just after midnight)
+        $schedule->call(function () {
+            \App\Models\Member::where('status_aktif', true)
+                ->whereNotNull('tanggal_selesai_magang')
+                ->whereDate('tanggal_selesai_magang', '<', now()->toDateString())
+                ->update(['status_aktif' => false]);
+        })->dailyAt('00:01')->timezone('Asia/Jakarta');
     }
 
     /**

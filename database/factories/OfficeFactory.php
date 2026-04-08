@@ -18,7 +18,6 @@ class OfficeFactory extends Factory
     {
         return [
             'name' => $this->faker->company,
-            'address' => $this->faker->address,
             'latitude' => $this->faker->latitude,
             'longitude' => $this->faker->longitude,
         ];

@@ -42,6 +42,22 @@ class UserController extends Controller
     }
 
     /**
+     * Display users without an active or pending member application
+     */
+    public function availableForMember()
+    {
+        $users = User::where('role', 'user')
+            ->whereDoesntHave('member', function ($q) {
+                $q->whereIn('status', ['pending', 'approved']);
+            })
+            ->get(['id', 'name', 'email']);
+
+        return response()->json([
+            'data' => $users
+        ]);
+    }
+
+    /**
      * Store a newly created user.
      */
     public function store(Request $request)

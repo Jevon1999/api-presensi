@@ -47,6 +47,12 @@ class MemberController extends Controller
      */
     public function index(Request $request)
     {
+        // Auto-deactivate expired members dynamically just before viewing
+        Member::where('status_aktif', true)
+            ->whereNotNull('tanggal_selesai_magang')
+            ->whereDate('tanggal_selesai_magang', '<', now()->toDateString())
+            ->update(['status_aktif' => false]);
+
         $query = Member::with(['office', 'creator']);
         
         //filter by office
@@ -115,6 +121,7 @@ class MemberController extends Controller
         $validated = $request->validate([
             'no_hp' => 'required|string|unique:members,no_hp|max:15',
             'office_id' => 'required|exists:offices,id',
+            'user_id' => 'nullable|exists:users,id',
             'nama_lengkap' => 'required|string|max:255',
             'jenis_kelamin' => 'required|in:L,P',
             'asal_sekolah' => 'required|string|max:255',
@@ -233,6 +240,7 @@ class MemberController extends Controller
         $validated = $request->validate([
             'no_hp' => 'sometimes|required|string|unique:members,no_hp,' . $id . '|max:15',
             'office_id' => 'sometimes|required|exists:offices,id',
+            'user_id' => 'sometimes|nullable|exists:users,id',
             'nama_lengkap' => 'sometimes|required|string|max:255',
             'jenis_kelamin' => 'sometimes|required|in:L,P',
             'asal_sekolah' => 'sometimes|required|string|max:255',

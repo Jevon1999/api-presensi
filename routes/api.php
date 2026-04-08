@@ -41,6 +41,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/member/progress', [MemberDashboardController::class, 'progress']);
     Route::get('/member/report', [MemberDashboardController::class, 'report']);
 
+    // Admin: specific operations
+    Route::get('/users/available-for-member', [UserController::class, 'availableForMember']);
+    Route::get('/members/pending-count', [MemberApplicationController::class, 'pendingCount']);
+
     // Admin: approve/reject member applications
     Route::put('/members/{id}/approve', [MemberApplicationController::class, 'approve']);
     Route::put('/members/{id}/reject', [MemberApplicationController::class, 'reject']);
