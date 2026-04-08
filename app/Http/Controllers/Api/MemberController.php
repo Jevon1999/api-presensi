@@ -53,7 +53,9 @@ class MemberController extends Controller
             ->whereDate('tanggal_selesai_magang', '<', now()->toDateString())
             ->update(['status_aktif' => false]);
 
-        $query = Member::with(['office', 'creator']);
+        // Opsi C: Sembunyikan member yang user-nya sudah dihapus (user_id = null)
+        // Data tetap tersimpan di database untuk historis, tapi tidak tampil di list
+        $query = Member::with(['office', 'creator'])->whereNotNull('user_id');
         
         //filter by office
         if ($request->has('office_id')) {
