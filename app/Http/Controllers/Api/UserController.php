@@ -131,6 +131,9 @@ class UserController extends Controller
             ], 403);
         }
 
+        // Revoke semua token Sanctum user yang dihapus agar sesi langsung invalid
+        $user->tokens()->delete();
+
         $user->delete();
 
         return response()->json([
