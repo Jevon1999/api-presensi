@@ -20,7 +20,7 @@ class MemberApplicationController extends Controller
             return response()->json(['message' => 'Hanya user biasa yang bisa mengajukan pendaftaran.'], 403);
         }
 
-        // Check if user already has a pending or approved member
+        // Cek jika sudah ada pengajuan pending atau sudah approved
         $existing = Member::where('user_id', $user->id)
             ->whereIn('status', ['pending', 'approved'])
             ->first();
@@ -32,19 +32,29 @@ class MemberApplicationController extends Controller
             return response()->json(['message' => $msg], 422);
         }
 
+        // Cek apakah ada pengajuan sebelumnya yang DITOLAK (rejected)
+        // Jika ada, update record lama ke pending (bukan buat record baru)
+        $rejected = Member::where('user_id', $user->id)
+            ->where('status', 'rejected')
+            ->first();
+
+        // Validasi — jika re-apply, abaikan no_hp dari record rejected sendiri
+        $noHpRule = $rejected
+            ? ['required', 'string', 'max:15', \Illuminate\Validation\Rule::unique('members', 'no_hp')->ignore($rejected->id)]
+            : ['required', 'string', 'max:15', 'unique:members,no_hp'];
+
         $request->validate([
-            'no_hp' => 'required|string|max:15|unique:members,no_hp',
-            'office_id' => 'required|exists:offices,id',
-            'jenis_kelamin' => 'required|in:L,P',
-            'asal_sekolah' => 'required|string|max:255',
-            'jurusan' => 'nullable|string|max:255',
-            'tanggal_mulai_magang' => 'required|date',
+            'no_hp'                  => $noHpRule,
+            'office_id'              => 'required|exists:offices,id',
+            'jenis_kelamin'          => 'required|in:L,P',
+            'asal_sekolah'           => 'required|string|max:255',
+            'jurusan'                => 'nullable|string|max:255',
+            'tanggal_mulai_magang'   => 'required|date',
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
         ]);
 
-        // Normalize phone number to +62 format
-        $noHp = $request->no_hp;
-        $noHp = preg_replace('/[^\d+]/', '', $noHp);
+        // Normalisasi nomor HP ke format +62
+        $noHp = preg_replace('/[^\d+]/', '', $request->no_hp);
         if (preg_match('/^08/', $noHp)) {
             $noHp = '+62' . substr($noHp, 1);
         } elseif (preg_match('/^628/', $noHp)) {
@@ -53,26 +63,49 @@ class MemberApplicationController extends Controller
             $noHp = '+62' . $noHp;
         }
 
+        if ($rejected) {
+            // UPDATE record rejected menjadi pending kembali
+            $rejected->update([
+                'no_hp'                  => $noHp,
+                'office_id'              => $request->office_id,
+                'nama_lengkap'           => $user->name,
+                'jenis_kelamin'          => $request->jenis_kelamin,
+                'asal_sekolah'           => $request->asal_sekolah,
+                'jurusan'                => $request->jurusan,
+                'tanggal_mulai_magang'   => $request->tanggal_mulai_magang,
+                'tanggal_selesai_magang' => $request->tanggal_selesai_magang,
+                'status'                 => 'pending',
+                'status_aktif'           => false,
+                'rejection_reason'       => null,
+            ]);
+            $rejected->load('office:id,name');
+            return response()->json([
+                'message' => 'Pengajuan ulang berhasil dikirim. Menunggu persetujuan admin.',
+                'data'    => $rejected,
+            ], 200);
+        }
+
+        // Buat record baru jika belum pernah ada pengajuan sebelumnya
         $member = Member::create([
-            'user_id' => $user->id,
-            'no_hp' => $noHp,
-            'office_id' => $request->office_id,
-            'nama_lengkap' => $user->name,
-            'jenis_kelamin' => $request->jenis_kelamin,
-            'asal_sekolah' => $request->asal_sekolah,
-            'jurusan' => $request->jurusan,
-            'tanggal_mulai_magang' => $request->tanggal_mulai_magang,
+            'user_id'                => $user->id,
+            'no_hp'                  => $noHp,
+            'office_id'              => $request->office_id,
+            'nama_lengkap'           => $user->name,
+            'jenis_kelamin'          => $request->jenis_kelamin,
+            'asal_sekolah'           => $request->asal_sekolah,
+            'jurusan'                => $request->jurusan,
+            'tanggal_mulai_magang'   => $request->tanggal_mulai_magang,
             'tanggal_selesai_magang' => $request->tanggal_selesai_magang,
-            'status_aktif' => false,
-            'status' => 'pending',
-            'created_by' => null,
+            'status_aktif'           => false,
+            'status'                 => 'pending',
+            'created_by'             => null,
         ]);
 
         $member->load('office:id,name');
 
         return response()->json([
             'message' => 'Pengajuan berhasil dikirim. Menunggu persetujuan admin.',
-            'data' => $member,
+            'data'    => $member,
         ], 201);
     }
 
