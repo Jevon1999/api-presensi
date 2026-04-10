@@ -51,12 +51,13 @@ class SendCheckInReminder extends Command
 
         $this->info("Found {$members->count()} members to remind for check-in.");
 
-        $message = $config->message_remind_check_in 
-            ?: "🔔 *Reminder Check-in*\n\nHalo! Jangan lupa untuk check-in hari ini ya.\n\nKetik *masuk* untuk check-in kehadiran.\n\nTerima kasih! 😊";
+        $template = $config->message_remind_check_in 
+            ?: "🔔 *Reminder Check-in*\n\nHalo {nama}! Jangan lupa untuk check-in hari ini ya.\n\nKetik *masuk* untuk check-in kehadiran.\n\nTerima kasih! 😊";
 
         $sentCount = 0;
         foreach ($members as $member) {
             $chatId = $this->formatChatId($member->no_hp);
+            $message = str_replace('{nama}', $member->nama_lengkap, $template);
             
             if ($this->sendMessage($config, $chatId, $message)) {
                 $sentCount++;

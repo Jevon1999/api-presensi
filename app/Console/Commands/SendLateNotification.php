@@ -72,17 +72,12 @@ class SendLateNotification extends Command
 
         $this->info("Found {$members->count()} members who are late and have not checked in.");
 
-        $thresholdFormatted = Carbon::parse($lateThreshold)->format('H:i');
-        $message = "⚠️ *Notifikasi Keterlambatan*\n\n";
-        $message .= "Halo! Kamu belum check-in hari ini dan sudah melewati batas waktu ({$thresholdFormatted} WIB).\n\n";
-        $message .= "Jika kamu berhalangan hadir, ketik:\n";
-        $message .= "• *izin [alasan]* - untuk izin\n";
-        $message .= "• *sakit [keterangan]* - jika sakit\n\n";
-        $message .= "Atau ketik *masuk* untuk check-in sekarang (akan tercatat terlambat).";
+        $template = $config->message_error ?: "⚠️ *Notifikasi Keterlambatan*\n\nHalo {nama}! Kamu belum check-in hari ini dan melewati batas waktu telat/alpha.\n\nJika kamu berhalangan hadir, ketik:\n• *izin [alasan]* - untuk izin\n• *sakit [keterangan]* - jika sakit\n\nAtau ketik *masuk* untuk check-in sekarang (akan tercatat terlambat).";
 
         $sentCount = 0;
         foreach ($members as $member) {
             $chatId = $this->formatChatId($member->no_hp);
+            $message = str_replace('{nama}', $member->nama_lengkap, $template);
             
             if ($this->sendMessage($config, $chatId, $message)) {
                 $sentCount++;

@@ -39,6 +39,7 @@ class BotConfigController extends Controller
             'message_success_check_out'  => 'sometimes|nullable|string',
             'message_error'              => 'sometimes|nullable|string',
             'message_greeting'           => 'sometimes|nullable|string',
+            'message_remind_late'        => 'sometimes|nullable|string',
         ]);
 
         $config = BotConfig::config();
@@ -75,6 +76,9 @@ class BotConfigController extends Controller
             if (array_key_exists($field, $validated)) {
                 $data[$field] = $validated[$field];
             }
+        }
+        if (array_key_exists('message_remind_late', $validated)) {
+            $data['message_error'] = $validated['message_remind_late'];
         }
 
         $config->update($data);

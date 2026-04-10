@@ -52,12 +52,13 @@ class SendCheckOutReminder extends Command
 
         $this->info("Found {$members->count()} members to remind for check-out.");
 
-        $message = $config->message_remind_check_out 
-            ?: "🔔 *Reminder Check-out*\n\nHalo! Jangan lupa untuk check-out sebelum pulang ya.\n\nKetik *keluar* untuk check-out kehadiran.\n\nTerima kasih atas kerja kerasmu hari ini! 🎉";
+        $template = $config->message_remind_check_out 
+            ?: "🔔 *Reminder Check-out*\n\nHalo {nama}! Jangan lupa untuk check-out sebelum pulang ya.\n\nKetik *keluar* untuk check-out kehadiran.\n\nTerima kasih atas kerja kerasmu hari ini! 🎉";
 
         $sentCount = 0;
         foreach ($members as $member) {
             $chatId = $this->formatChatId($member->no_hp);
+            $message = str_replace('{nama}', $member->nama_lengkap, $template);
             
             if ($this->sendMessage($config, $chatId, $message)) {
                 $sentCount++;
