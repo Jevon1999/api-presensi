@@ -72,13 +72,10 @@ class BotConfigController extends Controller
         }
 
         // Message templates
-        foreach (['message_remind_check_in', 'message_remind_check_out', 'message_success_check_in', 'message_success_check_out', 'message_error', 'message_greeting'] as $field) {
+        foreach (['message_remind_check_in', 'message_remind_check_out', 'message_remind_late', 'message_success_check_in', 'message_success_check_out', 'message_error', 'message_greeting'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $data[$field] = $validated[$field];
             }
-        }
-        if (array_key_exists('message_remind_late', $validated)) {
-            $data['message_error'] = $validated['message_remind_late'];
         }
 
         $config->update($data);

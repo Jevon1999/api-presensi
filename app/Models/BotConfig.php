@@ -29,6 +29,7 @@ class BotConfig extends Model
         'message_greeting',
         'message_remind_check_in',
         'message_remind_check_out',
+        'message_remind_late',
         'message_success_check_in',
         'message_success_check_out',
         'message_already_checked_in',
@@ -74,7 +75,7 @@ class BotConfig extends Model
             'message_success_check_in'   => $this->message_success_check_in,
             'message_success_check_out'  => $this->message_success_check_out,
             'message_error'              => $this->message_error,
-            'message_remind_late'        => $this->message_error,
+            'message_remind_late'        => $this->message_remind_late,
             'message_greeting'           => $this->message_greeting,
         ];
     }
