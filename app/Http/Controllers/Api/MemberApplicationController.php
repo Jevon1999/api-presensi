@@ -40,8 +40,8 @@ class MemberApplicationController extends Controller
 
         // Validasi — jika re-apply, abaikan no_hp dari record rejected sendiri
         $noHpRule = $rejected
-            ? ['required', 'string', 'max:15', \Illuminate\Validation\Rule::unique('members', 'no_hp')->ignore($rejected->id)]
-            : ['required', 'string', 'max:15', 'unique:members,no_hp'];
+            ? ['required', 'string', 'max:20', \Illuminate\Validation\Rule::unique('members', 'no_hp')->ignore($rejected->id)]
+            : ['required', 'string', 'max:20', 'unique:members,no_hp'];
 
         $request->validate([
             'no_hp'                  => $noHpRule,
