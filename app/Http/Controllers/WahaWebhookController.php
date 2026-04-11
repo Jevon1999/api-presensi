@@ -53,11 +53,23 @@ class WahaWebhookController extends Controller
 
             // Extract phone number from WhatsApp ID
             // WhatsApp can send: 6285848607270@c.us, 30107754344618@lid, etc
+            // Also check _data.key.remoteJidAlt for actual phone number
             // Remove any @{suffix} to get pure phone number
             $phoneNumber = preg_replace('/@.*$/', '', $from);
             
+            // If _data has remoteJidAlt with actual phone number, use that instead
+            if (isset($payload['_data']['key']['remoteJidAlt']) && !empty($payload['_data']['key']['remoteJidAlt'])) {
+                $remoteJidAlt = $payload['_data']['key']['remoteJidAlt'];
+                $altPhoneNumber = preg_replace('/@.*$/', '', $remoteJidAlt);
+                // Only use altPhoneNumber if it looks like a valid phone (more digits)
+                if (strlen($altPhoneNumber) > strlen($phoneNumber) || preg_match('/^62\d{8,}/', $altPhoneNumber)) {
+                    $phoneNumber = $altPhoneNumber;
+                }
+            }
+            
             Log::info('WAHA phone extraction', [
                 'from' => $from,
+                'remoteJidAlt' => $payload['_data']['key']['remoteJidAlt'] ?? null,
                 'extracted_phoneNumber' => $phoneNumber,
             ]);
 
