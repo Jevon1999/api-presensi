@@ -619,26 +619,32 @@ class WahaWebhookController extends Controller
      */
     private function findMember($phoneNumber)
     {
-        $normalized = $this->normalizePhoneNumber($phoneNumber);
+        // Normalize input ke berbagai format
+        $normalized = $this->normalizePhoneNumber($phoneNumber);  // +62xxx
+        $digits = preg_replace('/[^0-9]/', '', $phoneNumber);     // Hanya angka
         
-        // Extract just the digits without +62
-        $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
-        
-        // Normalize to 62xxx format (without +)
+        // Normalize ke 62xxx (tanpa +)
         if (substr($digits, 0, 1) === '0') {
-            $digits = '62' . substr($digits, 1);
-        } elseif (substr($digits, 0, 2) !== '62') {
-            $digits = '62' . $digits;
+            $digits62 = '62' . substr($digits, 1);  // 08xxx → 628xxx
+        } elseif (substr($digits, 0, 2) === '62') {
+            $digits62 = $digits;  // Sudah 62xxx
+        } else {
+            $digits62 = '62' . $digits;  // xxx → 62xxx
         }
         
-        // Try to find member with any of these formats:
-        // +62xxx, 62xxx, 0xxx (last 9-11 digits)
-        $member = Member::where(function ($query) use ($normalized, $digits, $phoneNumber) {
-            $query->where('no_hp', $normalized)  // +62xxx
-                  ->orWhere('no_hp', $digits)    // 62xxx
-                  ->orWhere('no_hp', 'LIKE', '%' . substr($digits, -11))  // Last 11 digits
-                  ->orWhere('no_hp', 'LIKE', '%' . preg_replace('/[^0-9]/', '', $phoneNumber));
-        })->where('status_aktif', true)->where('status', 'approved')->first();
+        // Juga buat format 0xxx jika ada
+        $digits0 = '0' . substr($digits62, 2);  // 628xxx → 08xxx
+        
+        // Try to find member - cek di database dengan berbagai format kemungkinan tersimpan
+        $member = Member::where(function ($query) use ($normalized, $digits62, $digits0) {
+            $query->where('no_hp', $normalized)   // +62xxx
+                  ->orWhere('no_hp', $digits62)   // 62xxx
+                  ->orWhere('no_hp', $digits0)    // 0xxx
+                  ->orWhere('no_hp', '+' . $digits62);  // +62xxx (same as normalized, redundant but safe)
+        })
+        ->where('status', 'approved')
+        ->where('status_aktif', true)
+        ->first();
         
         return $member;
     }
@@ -648,39 +654,60 @@ class WahaWebhookController extends Controller
      */
     private function getMemberOrErrorMessage($phoneNumber)
     {
-        $normalized = $this->normalizePhoneNumber($phoneNumber);
-        
-        // Try find with flexible format first
+        // Try find member dengan status approved dan aktif
         $member = $this->findMember($phoneNumber);
         
         if ($member) {
             return ['success' => true, 'member' => $member];
         }
         
-        // Check if member exists with different status
-        $allFormats = Member::where(function ($query) use ($phoneNumber) {
-            $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
-            if (substr($digits, 0, 1) === '0') {
-                $digits = '62' . substr($digits, 1);
-            } elseif (substr($digits, 0, 2) !== '62') {
-                $digits = '62' . $digits;
-            }
-            $query->where('no_hp', $digits)
-                  ->orWhere('no_hp', '+' . $digits)
-                  ->orWhere('no_hp', 'LIKE', '%' . substr($digits, -11))
-                  ->orWhere('no_hp', 'LIKE', '%' . preg_replace('/[^0-9]/', '', $phoneNumber));
-        })->first();
+        // Member tidak ditemukan dengan status approved/aktif
+        // Cek apakah nomor ada di database tapi dengan status/kondisi berbeda
         
-        if ($allFormats) {
-            if ($allFormats->status === 'pending') {
-                return ['success' => false, 'message' => "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu."];
-            } elseif ($allFormats->status === 'rejected') {
-                return ['success' => false, 'message' => "❌ Akun kamu ditolak.\n\nAlasan: {$allFormats->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut."];
-            } elseif (!$allFormats->status_aktif) {
-                return ['success' => false, 'message' => "❌ Akun kamu belum diaktifkan.\n\nSilakan hubungi admin."];
-            }
+        // Normalize ke berbagai format
+        $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
+        
+        if (substr($digits, 0, 1) === '0') {
+            $digits62 = '62' . substr($digits, 1);
+        } elseif (substr($digits, 0, 2) === '62') {
+            $digits62 = $digits;
+        } else {
+            $digits62 = '62' . $digits;
         }
         
+        $normalized = '+' . $digits62;
+        $digits0 = '0' . substr($digits62, 2);
+        
+        // Cari member dengan format apapun (tidak perdulian status)
+        $memberExists = Member::where(function ($query) use ($normalized, $digits62, $digits0) {
+            $query->where('no_hp', $normalized)
+                  ->orWhere('no_hp', $digits62)
+                  ->orWhere('no_hp', $digits0)
+                  ->orWhere('no_hp', '+' . $digits62);
+        })->first();
+        
+        if ($memberExists) {
+            // Member ditemukan tapi dengan status/kondisi berbeda
+            if ($memberExists->status === 'pending') {
+                return ['success' => false, 'message' => "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu."];
+            }
+            
+            if ($memberExists->status === 'rejected') {
+                $reason = $memberExists->rejection_reason ?? 'Tidak ada alasan yang diberikan';
+                return ['success' => false, 'message' => "❌ Akun kamu ditolak.\n\nAlasan: {$reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut."];
+            }
+            
+            if (!$memberExists->status_aktif) {
+                return ['success' => false, 'message' => "❌ Akun kamu belum diaktifkan oleh admin.\n\nSilakan hubungi admin."];
+            }
+            
+            // Member ada dan approved tapi status_aktif true
+            // Ini seharusnya tidak terjadi (sudah dicatch di findMember)
+            // Tapi jika terjadi, anggap sebagai error sistem
+            return ['success' => false, 'message' => "❌ Terjadi kesalahan sistem. Silakan hubungi admin."];
+        }
+        
+        // Member sama sekali tidak ditemukan di database
         return ['success' => false, 'message' => "❌ Nomor HP kamu belum terdaftar.\n\nSilakan hubungi admin untuk registrasi."];
     }
 
