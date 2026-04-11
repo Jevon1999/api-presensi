@@ -51,8 +51,15 @@ class WahaWebhookController extends Controller
                 return response()->json(['status' => 'ignored', 'reason' => 'no sender or empty message']);
             }
 
-            // Extract phone number from WhatsApp ID (remove @c.us)
-            $phoneNumber = str_replace('@c.us', '', $from);
+            // Extract phone number from WhatsApp ID
+            // WhatsApp can send: 6285848607270@c.us, 30107754344618@lid, etc
+            // Remove any @{suffix} to get pure phone number
+            $phoneNumber = preg_replace('/@.*$/', '', $from);
+            
+            Log::info('WAHA phone extraction', [
+                'from' => $from,
+                'extracted_phoneNumber' => $phoneNumber,
+            ]);
 
             // Get bot config
             $config = BotConfig::where('is_active', true)->first();
