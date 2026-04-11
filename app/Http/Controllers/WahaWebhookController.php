@@ -636,33 +636,41 @@ class WahaWebhookController extends Controller
         $digits0 = '0' . substr($digits62, 2);  // 628xxx → 08xxx
         
         // Try to find member - cek di database dengan berbagai format kemungkinan tersimpan
+        // Minimum requirement: status_aktif=true (sudah diaktifkan untuk magang)
+        // Status field boleh apa saja (pending/approved/rejected), tapi akan di-validate di getMemberOrErrorMessage
         $member = Member::where(function ($query) use ($normalized, $digits62, $digits0) {
             $query->where('no_hp', $normalized)   // +62xxx
                   ->orWhere('no_hp', $digits62)   // 62xxx
                   ->orWhere('no_hp', $digits0)    // 0xxx
                   ->orWhere('no_hp', '+' . $digits62);  // +62xxx (same as normalized, redundant but safe)
         })
-        ->where('status', 'approved')
-        ->where('status_aktif', true)
+        ->where('status_aktif', true)  // ONLY requirement: must be active
         ->first();
         
         return $member;
     }
 
     /**
-     * Find member return error message based on status
+     * Find member and return appropriate error message if not found
+     * Accepts members with status_aktif=true (regardless of approval status)
      */
     private function getMemberOrErrorMessage($phoneNumber)
     {
-        // Try find member dengan status approved dan aktif
+        // Try find member dengan status_aktif=true
         $member = $this->findMember($phoneNumber);
         
         if ($member) {
+            // Member ditemukan dan aktif
+            // Check if rejected untuk warning
+            if ($member->status === 'rejected') {
+                return ['success' => false, 'message' => "❌ Akun kamu ditolak.\n\nAlasan: {$member->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut."];
+            }
+            // Member aktif, boleh lanjut (regardless of pending/approved status)
             return ['success' => true, 'member' => $member];
         }
         
-        // Member tidak ditemukan dengan status approved/aktif
-        // Cek apakah nomor ada di database tapi dengan status/kondisi berbeda
+        // Member tidak ditemukan dengan status_aktif=true
+        // Cek apakah nomor ada di database tapi dengan status berbeda
         
         // Normalize ke berbagai format
         $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
@@ -678,7 +686,7 @@ class WahaWebhookController extends Controller
         $normalized = '+' . $digits62;
         $digits0 = '0' . substr($digits62, 2);
         
-        // Cari member dengan format apapun (tidak perdulian status)
+        // Cari member dengan format apapun (tidak peduli status)
         $memberExists = Member::where(function ($query) use ($normalized, $digits62, $digits0) {
             $query->where('no_hp', $normalized)
                   ->orWhere('no_hp', $digits62)
@@ -687,27 +695,25 @@ class WahaWebhookController extends Controller
         })->first();
         
         if ($memberExists) {
-            // Member ditemukan tapi dengan status/kondisi berbeda
-            if ($memberExists->status === 'pending') {
-                return ['success' => false, 'message' => "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu."];
-            }
+            // Nomor ada di database tapi tidak aktif atau status problematic
             
             if ($memberExists->status === 'rejected') {
-                $reason = $memberExists->rejection_reason ?? 'Tidak ada alasan yang diberikan';
-                return ['success' => false, 'message' => "❌ Akun kamu ditolak.\n\nAlasan: {$reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut."];
+                return ['success' => false, 'message' => "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut."];
+            }
+            
+            if ($memberExists->status === 'pending' && !$memberExists->status_aktif) {
+                return ['success' => false, 'message' => "⏳ Akun kamu masih dalam proses persetujuan.\n\nSilakan tunggu admin mengaktifkan akun kamu, atau hubungi admin untuk info lebih lanjut."];
             }
             
             if (!$memberExists->status_aktif) {
-                return ['success' => false, 'message' => "❌ Akun kamu belum diaktifkan oleh admin.\n\nSilakan hubungi admin."];
+                return ['success' => false, 'message' => "❌ Akun kamu belum diaktifkan.\n\nSilakan hubungi admin untuk aktivasi."];
             }
             
-            // Member ada dan approved tapi status_aktif true
-            // Ini seharusnya tidak terjadi (sudah dicatch di findMember)
-            // Tapi jika terjadi, anggap sebagai error sistem
-            return ['success' => false, 'message' => "❌ Terjadi kesalahan sistem. Silakan hubungi admin."];
+            // This shouldn't happen - already caught in findMember
+            return ['success' => false, 'message' => "❌ Akun kamu mengalami masalah teknis.\n\nSilakan hubungi admin."];
         }
         
-        // Member sama sekali tidak ditemukan di database
+        // Nomor sama sekali tidak ditemukan di database
         return ['success' => false, 'message' => "❌ Nomor HP kamu belum terdaftar.\n\nSilakan hubungi admin untuk registrasi."];
     }
 
