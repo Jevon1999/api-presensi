@@ -139,13 +139,32 @@ class WahaWebhookController extends Controller
     {
         $normalized = $this->normalizePhoneNumber($phoneNumber);
 
-        // Find member
+        // Find member - harus approved dan aktif
         $member = Member::where('no_hp', $normalized)
             ->where('status_aktif', true)
+            ->where('status', 'approved')
             ->first();
 
         if (!$member) {
-            return "Maaf, nomor HP kamu belum terdaftar atau tidak aktif. 😔\n\nSilakan hubungi admin untuk registrasi.";
+            // Check if member exists but not approved
+            $memberExists = Member::where('no_hp', $normalized)->first();
+            if ($memberExists && $memberExists->status === 'pending') {
+                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
+            } elseif ($memberExists && $memberExists->status === 'rejected') {
+                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
+            }
+            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
+        }
+
+        // Check if current time is within attendance hours
+        $currentTime = Carbon::now()->format('H:i:s');
+        $officeOpenTime = $config->reminder_check_in_time ?? '06:00:00';
+        $officeCloseTime = $config->reminder_check_out_time ?? '18:00:00';
+        
+        if ($currentTime < $officeOpenTime || $currentTime > $officeCloseTime) {
+            $openTime = Carbon::createFromFormat('H:i:s', $officeOpenTime)->format('H:i');
+            $closeTime = Carbon::createFromFormat('H:i:s', $officeCloseTime)->format('H:i');
+            return "⏰ Maaf, jam absen belum dibuka.\n\nJam absen: *{$openTime} - {$closeTime}* WIB\n\nJam sekarang: *" . Carbon::now()->format('H:i') . "* WIB";
         }
 
         // Check if already checked in today
@@ -213,13 +232,32 @@ class WahaWebhookController extends Controller
     {
         $normalized = $this->normalizePhoneNumber($phoneNumber);
 
-        // Find member
+        // Find member - harus approved dan aktif
         $member = Member::where('no_hp', $normalized)
             ->where('status_aktif', true)
+            ->where('status', 'approved')
             ->first();
 
         if (!$member) {
-            return "Maaf, nomor HP kamu belum terdaftar atau tidak aktif. 😔\n\nSilakan hubungi admin untuk registrasi.";
+            // Check if member exists but not approved
+            $memberExists = Member::where('no_hp', $normalized)->first();
+            if ($memberExists && $memberExists->status === 'pending') {
+                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
+            } elseif ($memberExists && $memberExists->status === 'rejected') {
+                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
+            }
+            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
+        }
+
+        // Check if current time is within attendance hours
+        $currentTime = Carbon::now()->format('H:i:s');
+        $officeOpenTime = $config->reminder_check_in_time ?? '06:00:00';
+        $officeCloseTime = $config->reminder_check_out_time ?? '18:00:00';
+        
+        if ($currentTime < $officeOpenTime || $currentTime > $officeCloseTime) {
+            $openTime = Carbon::createFromFormat('H:i:s', $officeOpenTime)->format('H:i');
+            $closeTime = Carbon::createFromFormat('H:i:s', $officeCloseTime)->format('H:i');
+            return "⏰ Maaf, jam absen sudah ditutup.\n\nJam absen: *{$openTime} - {$closeTime}* WIB\n\nJam sekarang: *" . Carbon::now()->format('H:i') . "* WIB";
         }
 
         // Check if checked in today
@@ -229,12 +267,12 @@ class WahaWebhookController extends Controller
             ->first();
 
         if (!$attendance || !$attendance->check_in_time) {
-            return "Maaf, kamu belum check-in hari ini. 😅\n\nSilakan check-in terlebih dahulu dengan mengetik *masuk*.";
+            return "❌ Kamu belum check-in hari ini.\n\nSilakan check-in terlebih dahulu dengan mengetik *masuk*.";
         }
 
         if ($attendance->check_out_time) {
             $checkOutTime = Carbon::parse($attendance->check_out_time)->format('H:i');
-            return "Halo *{$member->nama_lengkap}* 👋\n\nKamu sudah check-out hari ini pada pukul *{$checkOutTime}* WIB.";
+            return "ℹ️ Kamu sudah check-out hari ini pada pukul *{$checkOutTime}* WIB.";
         }
 
         // Update check-out time
@@ -266,13 +304,21 @@ class WahaWebhookController extends Controller
     {
         $normalized = $this->normalizePhoneNumber($phoneNumber);
 
-        // Find member
+        // Find member - harus approved dan aktif
         $member = Member::where('no_hp', $normalized)
             ->where('status_aktif', true)
+            ->where('status', 'approved')
             ->first();
 
         if (!$member) {
-            return "Maaf, nomor HP kamu belum terdaftar atau tidak aktif. 😔\n\nSilakan hubungi admin untuk registrasi.";
+            // Check if member exists but not approved
+            $memberExists = Member::where('no_hp', $normalized)->first();
+            if ($memberExists && $memberExists->status === 'pending') {
+                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
+            } elseif ($memberExists && $memberExists->status === 'rejected') {
+                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
+            }
+            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
         }
 
         // Get today's attendance
@@ -374,13 +420,21 @@ class WahaWebhookController extends Controller
     {
         $normalized = $this->normalizePhoneNumber($phoneNumber);
 
-        // Find member
+        // Find member - harus approved dan aktif
         $member = Member::where('no_hp', $normalized)
             ->where('status_aktif', true)
+            ->where('status', 'approved')
             ->first();
 
         if (!$member) {
-            return "Maaf, nomor HP kamu belum terdaftar atau tidak aktif. 😔\n\nSilakan hubungi admin untuk registrasi.";
+            // Check if member exists but not approved
+            $memberExists = Member::where('no_hp', $normalized)->first();
+            if ($memberExists && $memberExists->status === 'pending') {
+                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
+            } elseif ($memberExists && $memberExists->status === 'rejected') {
+                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
+            }
+            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
         }
 
         // Check if reason is provided
@@ -441,13 +495,21 @@ class WahaWebhookController extends Controller
     {
         $normalized = $this->normalizePhoneNumber($phoneNumber);
 
-        // Find member
+        // Find member - harus approved dan aktif
         $member = Member::where('no_hp', $normalized)
             ->where('status_aktif', true)
+            ->where('status', 'approved')
             ->first();
 
         if (!$member) {
-            return "Maaf, nomor HP kamu belum terdaftar atau tidak aktif. 😔\n\nSilakan hubungi admin untuk registrasi.";
+            // Check if member exists but not approved
+            $memberExists = Member::where('no_hp', $normalized)->first();
+            if ($memberExists && $memberExists->status === 'pending') {
+                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
+            } elseif ($memberExists && $memberExists->status === 'rejected') {
+                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
+            }
+            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
         }
 
         // Check if reason is provided
