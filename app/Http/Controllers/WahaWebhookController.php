@@ -615,39 +615,81 @@ class WahaWebhookController extends Controller
 
     /**
      * Find member by phone number (flexible format matching)
-     * Handles: +62xxx, 62xxx, 08xxx, 0811xxx, etc
+     * Database stores: +62xxx format
+     * Input can be: +62xxx, 62xxx, 08xxx, or various formats from WhatsApp
      */
     private function findMember($phoneNumber)
     {
-        // Normalize input ke berbagai format
-        $normalized = $this->normalizePhoneNumber($phoneNumber);  // +62xxx
-        $digits = preg_replace('/[^0-9]/', '', $phoneNumber);     // Hanya angka
+        // Extract pure digits only from input
+        $inputDigits = preg_replace('/[^0-9]/', '', $phoneNumber);
         
-        // Normalize ke 62xxx (tanpa +)
-        if (substr($digits, 0, 1) === '0') {
-            $digits62 = '62' . substr($digits, 1);  // 08xxx → 628xxx
-        } elseif (substr($digits, 0, 2) === '62') {
-            $digits62 = $digits;  // Sudah 62xxx
-        } else {
-            $digits62 = '62' . $digits;  // xxx → 62xxx
+        // Get all active members
+        $members = Member::where('status_aktif', true)->get();
+        
+        Log::info('findMember - searching', [
+            'phoneNumber' => $phoneNumber,
+            'inputDigits' => $inputDigits,
+            'activeMembers' => $members->map(function($m) {
+                $digits = preg_replace('/[^0-9]/', '', $m->no_hp);
+                return [
+                    'id' => $m->id,
+                    'nama' => $m->nama_lengkap,
+                    'stored_no_hp' => $m->no_hp,
+                    'digits' => $digits,
+                ];
+            })->toArray(),
+        ]);
+        
+        foreach ($members as $member) {
+            $memberDigits = preg_replace('/[^0-9]/', '', $member->no_hp);
+            $memberLastDigits = substr($memberDigits, -10);
+            $memberLastDigits11 = substr($memberDigits, -11);
+            
+            $inputLastDigits = substr($inputDigits, -10);
+            $inputLastDigits11 = substr($inputDigits, -11);
+            
+            Log::debug('Comparing phone', [
+                'member_id' => $member->id,
+                'member_stored' => $member->no_hp,
+                'input_original' => $phoneNumber,
+                'member_digits' => $memberDigits,
+                'input_digits' => $inputDigits,
+                'exact_match' => $memberDigits === $inputDigits,
+                'last10_match' => $memberLastDigits === $inputLastDigits,
+                'last11_match' => $memberLastDigits11 === $inputLastDigits11,
+            ]);
+            
+            // Check exact match first
+            if ($memberDigits === $inputDigits) {
+                Log::info('✅ Phone matched (exact digits)', [
+                    'member_id' => $member->id,
+                    'input' => $phoneNumber,
+                    'stored' => $member->no_hp,
+                    'name' => $member->nama_lengkap,
+                ]);
+                return $member;
+            }
+            
+            // Check last digits match (handles format variations)
+            if ($memberLastDigits === $inputLastDigits || $memberLastDigits11 === $inputLastDigits11) {
+                Log::info('✅ Phone matched (last digits)', [
+                    'member_id' => $member->id,
+                    'input' => $phoneNumber,
+                    'stored' => $member->no_hp,
+                    'name' => $member->nama_lengkap,
+                    'last_10' => $memberLastDigits === $inputLastDigits,
+                    'last_11' => $memberLastDigits11 === $inputLastDigits11,
+                ]);
+                return $member;
+            }
         }
         
-        // Juga buat format 0xxx jika ada
-        $digits0 = '0' . substr($digits62, 2);  // 628xxx → 08xxx
+        Log::info('❌ No active member found with matching phone', [
+            'phoneNumber' => $phoneNumber,
+            'inputDigits' => $inputDigits,
+        ]);
         
-        // Try to find member - cek di database dengan berbagai format kemungkinan tersimpan
-        // Minimum requirement: status_aktif=true (sudah diaktifkan untuk magang)
-        // Status field boleh apa saja (pending/approved/rejected), tapi akan di-validate di getMemberOrErrorMessage
-        $member = Member::where(function ($query) use ($normalized, $digits62, $digits0) {
-            $query->where('no_hp', $normalized)   // +62xxx
-                  ->orWhere('no_hp', $digits62)   // 62xxx
-                  ->orWhere('no_hp', $digits0)    // 0xxx
-                  ->orWhere('no_hp', '+' . $digits62);  // +62xxx (same as normalized, redundant but safe)
-        })
-        ->where('status_aktif', true)  // ONLY requirement: must be active
-        ->first();
-        
-        return $member;
+        return null;
     }
 
     /**
@@ -670,32 +712,28 @@ class WahaWebhookController extends Controller
         }
         
         // Member tidak ditemukan dengan status_aktif=true
-        // Cek apakah nomor ada di database tapi dengan status berbeda
+        // Cek apakah nomor ada di database tapi dengan status_aktif=false atau status berbeda
+        $inputDigits = preg_replace('/[^0-9]/', '', $phoneNumber);
         
-        // Normalize ke berbagai format
-        $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
-        
-        if (substr($digits, 0, 1) === '0') {
-            $digits62 = '62' . substr($digits, 1);
-        } elseif (substr($digits, 0, 2) === '62') {
-            $digits62 = $digits;
-        } else {
-            $digits62 = '62' . $digits;
-        }
-        
-        $normalized = '+' . $digits62;
-        $digits0 = '0' . substr($digits62, 2);
-        
-        // Cari member dengan format apapun (tidak peduli status)
-        $memberExists = Member::where(function ($query) use ($normalized, $digits62, $digits0) {
-            $query->where('no_hp', $normalized)
-                  ->orWhere('no_hp', $digits62)
-                  ->orWhere('no_hp', $digits0)
-                  ->orWhere('no_hp', '+' . $digits62);
-        })->first();
+        // Search ALL members (regardless of status_aktif) to find why not matched
+        $memberExists = Member::get()->first(function($m) use ($inputDigits) {
+            $memberDigits = preg_replace('/[^0-9]/', '', $m->no_hp);
+            $memberLastDigits = substr($memberDigits, -10);
+            $inputLastDigits = substr($inputDigits, -10);
+            
+            return $memberDigits === $inputDigits || $memberLastDigits === $inputLastDigits;
+        });
         
         if ($memberExists) {
             // Nomor ada di database tapi tidak aktif atau status problematic
+            Log::warning('Member found but not ready for bot usage', [
+                'phoneNumber' => $phoneNumber,
+                'member_id' => $memberExists->id,
+                'nama_lengkap' => $memberExists->nama_lengkap,
+                'stored_no_hp' => $memberExists->no_hp,
+                'status_aktif' => $memberExists->status_aktif,
+                'status' => $memberExists->status,
+            ]);
             
             if ($memberExists->status === 'rejected') {
                 return ['success' => false, 'message' => "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut."];
@@ -714,6 +752,12 @@ class WahaWebhookController extends Controller
         }
         
         // Nomor sama sekali tidak ditemukan di database
+        Log::warning('Phone number not found in database at all', [
+            'phoneNumber' => $phoneNumber,
+            'inputDigits' => $inputDigits,
+            'allMembers' => Member::pluck('no_hp')->toArray(),
+            'allMembers_aktif' => Member::where('status_aktif', true)->pluck('no_hp')->toArray(),
+        ]);
         return ['success' => false, 'message' => "❌ Nomor HP kamu belum terdaftar.\n\nSilakan hubungi admin untuk registrasi."];
     }
 
