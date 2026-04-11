@@ -137,24 +137,12 @@ class WahaWebhookController extends Controller
      */
     private function handleCheckIn($phoneNumber, $config)
     {
-        $normalized = $this->normalizePhoneNumber($phoneNumber);
-
-        // Find member - harus approved dan aktif
-        $member = Member::where('no_hp', $normalized)
-            ->where('status_aktif', true)
-            ->where('status', 'approved')
-            ->first();
-
-        if (!$member) {
-            // Check if member exists but not approved
-            $memberExists = Member::where('no_hp', $normalized)->first();
-            if ($memberExists && $memberExists->status === 'pending') {
-                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
-            } elseif ($memberExists && $memberExists->status === 'rejected') {
-                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
-            }
-            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
+        // Find member with flexible format matching
+        $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
+        if (!$memberCheck['success']) {
+            return $memberCheck['message'];
         }
+        $member = $memberCheck['member'];
 
         // Check if current time is within attendance hours
         $currentTime = Carbon::now()->format('H:i:s');
@@ -230,24 +218,12 @@ class WahaWebhookController extends Controller
      */
     private function handleCheckOut($phoneNumber, $config)
     {
-        $normalized = $this->normalizePhoneNumber($phoneNumber);
-
-        // Find member - harus approved dan aktif
-        $member = Member::where('no_hp', $normalized)
-            ->where('status_aktif', true)
-            ->where('status', 'approved')
-            ->first();
-
-        if (!$member) {
-            // Check if member exists but not approved
-            $memberExists = Member::where('no_hp', $normalized)->first();
-            if ($memberExists && $memberExists->status === 'pending') {
-                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
-            } elseif ($memberExists && $memberExists->status === 'rejected') {
-                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
-            }
-            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
+        // Find member with flexible format matching
+        $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
+        if (!$memberCheck['success']) {
+            return $memberCheck['message'];
         }
+        $member = $memberCheck['member'];
 
         // Check if current time is within attendance hours
         $currentTime = Carbon::now()->format('H:i:s');
@@ -302,24 +278,12 @@ class WahaWebhookController extends Controller
      */
     private function handleStatus($phoneNumber)
     {
-        $normalized = $this->normalizePhoneNumber($phoneNumber);
-
-        // Find member - harus approved dan aktif
-        $member = Member::where('no_hp', $normalized)
-            ->where('status_aktif', true)
-            ->where('status', 'approved')
-            ->first();
-
-        if (!$member) {
-            // Check if member exists but not approved
-            $memberExists = Member::where('no_hp', $normalized)->first();
-            if ($memberExists && $memberExists->status === 'pending') {
-                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
-            } elseif ($memberExists && $memberExists->status === 'rejected') {
-                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
-            }
-            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
+        // Find member with flexible format matching
+        $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
+        if (!$memberCheck['success']) {
+            return $memberCheck['message'];
         }
+        $member = $memberCheck['member'];
 
         // Get today's attendance
         $today = now()->format('Y-m-d');
@@ -418,28 +382,27 @@ class WahaWebhookController extends Controller
      */
     private function handleIzin($phoneNumber, $reason, $config)
     {
-        $normalized = $this->normalizePhoneNumber($phoneNumber);
-
-        // Find member - harus approved dan aktif
-        $member = Member::where('no_hp', $normalized)
-            ->where('status_aktif', true)
-            ->where('status', 'approved')
-            ->first();
-
-        if (!$member) {
-            // Check if member exists but not approved
-            $memberExists = Member::where('no_hp', $normalized)->first();
-            if ($memberExists && $memberExists->status === 'pending') {
-                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
-            } elseif ($memberExists && $memberExists->status === 'rejected') {
-                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
-            }
-            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
+        // Find member with flexible format matching
+        $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
+        if (!$memberCheck['success']) {
+            return $memberCheck['message'];
         }
+        $member = $memberCheck['member'];
 
         // Check if reason is provided
         if (empty($reason)) {
             return "⚠️ *Format Izin Salah*\n\nSilakan ketik dengan format:\n*izin [alasan]*\n\nContoh: izin ada keperluan keluarga";
+        }
+
+        // Check if current time is within attendance hours
+        $currentTime = Carbon::now()->format('H:i:s');
+        $officeOpenTime = $config->reminder_check_in_time ?? '06:00:00';
+        $officeCloseTime = $config->reminder_check_out_time ?? '18:00:00';
+        
+        if ($currentTime < $officeOpenTime || $currentTime > $officeCloseTime) {
+            $openTime = Carbon::createFromFormat('H:i:s', $officeOpenTime)->format('H:i');
+            $closeTime = Carbon::createFromFormat('H:i:s', $officeCloseTime)->format('H:i');
+            return "⏰ Maaf, jam izin sudah ditutup.\n\nJam izin: *{$openTime} - {$closeTime}* WIB\n\nJam sekarang: *" . Carbon::now()->format('H:i') . "* WIB";
         }
 
         $today = now()->format('Y-m-d');
@@ -493,28 +456,27 @@ class WahaWebhookController extends Controller
      */
     private function handleSakit($phoneNumber, $reason, $config)
     {
-        $normalized = $this->normalizePhoneNumber($phoneNumber);
-
-        // Find member - harus approved dan aktif
-        $member = Member::where('no_hp', $normalized)
-            ->where('status_aktif', true)
-            ->where('status', 'approved')
-            ->first();
-
-        if (!$member) {
-            // Check if member exists but not approved
-            $memberExists = Member::where('no_hp', $normalized)->first();
-            if ($memberExists && $memberExists->status === 'pending') {
-                return "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu.";
-            } elseif ($memberExists && $memberExists->status === 'rejected') {
-                return "❌ Akun kamu ditolak.\n\nAlasan: {$memberExists->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut.";
-            }
-            return "❌ Nomor HP kamu belum terdaftar atau tidak aktif.\n\nSilakan hubungi admin untuk registrasi.";
+        // Find member with flexible format matching
+        $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
+        if (!$memberCheck['success']) {
+            return $memberCheck['message'];
         }
+        $member = $memberCheck['member'];
 
         // Check if reason is provided
         if (empty($reason)) {
             return "⚠️ *Format Sakit Salah*\n\nSilakan ketik dengan format:\n*sakit [keterangan]*\n\nContoh: sakit demam";
+        }
+
+        // Check if current time is within attendance hours
+        $currentTime = Carbon::now()->format('H:i:s');
+        $officeOpenTime = $config->reminder_check_in_time ?? '06:00:00';
+        $officeCloseTime = $config->reminder_check_out_time ?? '18:00:00';
+        
+        if ($currentTime < $officeOpenTime || $currentTime > $officeCloseTime) {
+            $openTime = Carbon::createFromFormat('H:i:s', $officeOpenTime)->format('H:i');
+            $closeTime = Carbon::createFromFormat('H:i:s', $officeCloseTime)->format('H:i');
+            return "⏰ Maaf, jam lapor sakit sudah ditutup.\n\nJam lapor: *{$openTime} - {$closeTime}* WIB\n\nJam sekarang: *" . Carbon::now()->format('H:i') . "* WIB";
         }
 
         $today = now()->format('Y-m-d');
@@ -652,7 +614,78 @@ class WahaWebhookController extends Controller
     }
 
     /**
-     * Normalize phone number to international format (+62xxx)
+     * Find member by phone number (flexible format matching)
+     * Handles: +62xxx, 62xxx, 08xxx, 0811xxx, etc
+     */
+    private function findMember($phoneNumber)
+    {
+        $normalized = $this->normalizePhoneNumber($phoneNumber);
+        
+        // Extract just the digits without +62
+        $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
+        
+        // Normalize to 62xxx format (without +)
+        if (substr($digits, 0, 1) === '0') {
+            $digits = '62' . substr($digits, 1);
+        } elseif (substr($digits, 0, 2) !== '62') {
+            $digits = '62' . $digits;
+        }
+        
+        // Try to find member with any of these formats:
+        // +62xxx, 62xxx, 0xxx (last 9-11 digits)
+        $member = Member::where(function ($query) use ($normalized, $digits, $phoneNumber) {
+            $query->where('no_hp', $normalized)  // +62xxx
+                  ->orWhere('no_hp', $digits)    // 62xxx
+                  ->orWhere('no_hp', 'LIKE', '%' . substr($digits, -11))  // Last 11 digits
+                  ->orWhere('no_hp', 'LIKE', '%' . preg_replace('/[^0-9]/', '', $phoneNumber));
+        })->where('status_aktif', true)->where('status', 'approved')->first();
+        
+        return $member;
+    }
+
+    /**
+     * Find member return error message based on status
+     */
+    private function getMemberOrErrorMessage($phoneNumber)
+    {
+        $normalized = $this->normalizePhoneNumber($phoneNumber);
+        
+        // Try find with flexible format first
+        $member = $this->findMember($phoneNumber);
+        
+        if ($member) {
+            return ['success' => true, 'member' => $member];
+        }
+        
+        // Check if member exists with different status
+        $allFormats = Member::where(function ($query) use ($phoneNumber) {
+            $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
+            if (substr($digits, 0, 1) === '0') {
+                $digits = '62' . substr($digits, 1);
+            } elseif (substr($digits, 0, 2) !== '62') {
+                $digits = '62' . $digits;
+            }
+            $query->where('no_hp', $digits)
+                  ->orWhere('no_hp', '+' . $digits)
+                  ->orWhere('no_hp', 'LIKE', '%' . substr($digits, -11))
+                  ->orWhere('no_hp', 'LIKE', '%' . preg_replace('/[^0-9]/', '', $phoneNumber));
+        })->first();
+        
+        if ($allFormats) {
+            if ($allFormats->status === 'pending') {
+                return ['success' => false, 'message' => "❌ Akun kamu masih dalam proses persetujuan.\n\nSilakan hubungi admin untuk persetujuan data kamu."];
+            } elseif ($allFormats->status === 'rejected') {
+                return ['success' => false, 'message' => "❌ Akun kamu ditolak.\n\nAlasan: {$allFormats->rejection_reason}\n\nSilakan hubungi admin untuk informasi lebih lanjut."];
+            } elseif (!$allFormats->status_aktif) {
+                return ['success' => false, 'message' => "❌ Akun kamu belum diaktifkan.\n\nSilakan hubungi admin."];
+            }
+        }
+        
+        return ['success' => false, 'message' => "❌ Nomor HP kamu belum terdaftar.\n\nSilakan hubungi admin untuk registrasi."];
+    }
+
+    /**
+     * Normalize phone number to +62xxx format
      */
     private function normalizePhoneNumber($phoneNumber)
     {
