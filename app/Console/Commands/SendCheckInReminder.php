@@ -31,49 +31,82 @@ class SendCheckInReminder extends Command
      */
     public function handle()
     {
-        $config = BotConfig::where('is_active', true)->first();
+        try {
+            $config = BotConfig::where('is_active', true)->first();
 
-        if (!$config || !$config->reminder_enabled) {
-            $this->info('Bot config not active or reminder disabled.');
-            return 0;
-        }
-
-        $today = Carbon::now()->format('Y-m-d');
-
-        // Get all active members who haven't checked in today
-        $members = Member::where('status_aktif', true)
-            ->whereNotNull('no_hp')
-            ->whereDoesntHave('attendances', function ($query) use ($today) {
-                $query->where('tanggal', $today)
-                    ->whereNotNull('check_in_time');
-            })
-            ->get();
-
-        $this->info("Found {$members->count()} members to remind for check-in.");
-
-        $template = $config->message_remind_check_in 
-            ?: "🔔 *Reminder Check-in*\n\nHalo {nama}! Jangan lupa untuk check-in hari ini ya.\n\nKetik *masuk* untuk check-in kehadiran.\n\nTerima kasih! 😊";
-
-        $sentCount = 0;
-        foreach ($members as $member) {
-            $chatId = $this->formatChatId($member->no_hp);
-            $message = str_replace('{nama}', $member->nama_lengkap, $template);
-            
-            if ($this->sendMessage($config, $chatId, $message)) {
-                $sentCount++;
-                $this->info("Reminder sent to: {$member->nama_lengkap}");
-            } else {
-                $this->error("Failed to send reminder to: {$member->nama_lengkap}");
+            if (!$config || !$config->reminder_enabled) {
+                $this->info('Bot config not active or reminder disabled.');
+                return 0;
             }
 
-            // Small delay to avoid overwhelming the API
-            usleep(500000); // 500ms delay
+            $today = Carbon::now()->format('Y-m-d');
+
+            // Get all active members who haven't checked in today
+            // This includes members with no attendance record at all
+            $members = Member::where('status_aktif', true)
+                ->whereNotNull('no_hp')
+                ->where(function ($query) use ($today) {
+                    // Members with no attendance record at all
+                    $query->whereDoesntHave('attendances', function ($subQuery) use ($today) {
+                        $subQuery->where('tanggal', $today);
+                    })
+                    // OR members who have attendance but no check-in
+                    ->orWhereHas('attendances', function ($subQuery) use ($today) {
+                        $subQuery->where('tanggal', $today)
+                            ->whereNull('check_in_time');
+                    });
+                })
+                ->get();
+
+            Log::info("Check-in reminder: Found {$members->count()} members to remind");
+            $this->info("Found {$members->count()} members to remind for check-in.");
+
+            $template = $config->message_remind_check_in 
+                ?: "🔔 *Reminder Check-in*\n\nHalo {nama}! Jangan lupa untuk check-in hari ini ya.\n\nKetik *masuk* untuk check-in kehadiran.\n\nTerima kasih! 😊";
+
+            $sentCount = 0;
+            $failedCount = 0;
+            
+            foreach ($members as $member) {
+                try {
+                    $chatId = $this->formatChatId($member->no_hp);
+                    $message = str_replace('{nama}', $member->nama_lengkap, $template);
+                    
+                    if ($this->sendMessage($config, $chatId, $message)) {
+                        $sentCount++;
+                        Log::info("Check-in reminder sent", ['member' => $member->nama_lengkap]);
+                        $this->info("✓ Reminder sent to: {$member->nama_lengkap}");
+                    } else {
+                        $failedCount++;
+                        Log::warning("Failed to send check-in reminder", ['member' => $member->nama_lengkap]);
+                        $this->error("✗ Failed to send reminder to: {$member->nama_lengkap}");
+                    }
+
+                    // Small delay to avoid overwhelming the API
+                    usleep(500000); // 500ms delay
+                } catch (\Exception $e) {
+                    $failedCount++;
+                    Log::error("Error sending check-in reminder to {$member->nama_lengkap}: " . $e->getMessage());
+                    $this->error("✗ Error sending to {$member->nama_lengkap}: {$e->getMessage()}");
+                }
+            }
+
+            $this->info("Check-in reminder completed: {$sentCount} sent, {$failedCount} failed.");
+            Log::info("Check-in reminder completed", [
+                'sent' => $sentCount,
+                'failed' => $failedCount,
+                'total' => $members->count()
+            ]);
+
+            return 0;
+
+        } catch (\Exception $e) {
+            Log::error('Check-in reminder command error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->error('Command error: ' . $e->getMessage());
+            return 1;
         }
-
-        $this->info("Check-in reminder sent to {$sentCount} members.");
-        Log::info("Check-in reminder sent to {$sentCount} members.");
-
-        return 0;
     }
 
     /**

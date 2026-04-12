@@ -234,6 +234,7 @@ class WahaWebhookController extends Controller
 
     /**
      * Handle check-out
+     * Now allows checkout anytime (for overtime scenarios)
      */
     private function handleCheckOut($phoneNumber, $config)
     {
@@ -244,18 +245,7 @@ class WahaWebhookController extends Controller
         }
         $member = $memberCheck['member'];
 
-        // Check if current time is within attendance hours
-        $currentTime = Carbon::now()->format('H:i:s');
-        $officeOpenTime = $config->reminder_check_in_time ?? '06:00:00';
-        $officeCloseTime = $config->reminder_check_out_time ?? '18:00:00';
-        
-        if ($currentTime < $officeOpenTime || $currentTime > $officeCloseTime) {
-            $openTime = Carbon::createFromFormat('H:i:s', $officeOpenTime)->format('H:i');
-            $closeTime = Carbon::createFromFormat('H:i:s', $officeCloseTime)->format('H:i');
-            return "⏰ Maaf, jam absen sudah ditutup.\n\nJam absen: *{$openTime} - {$closeTime}* WIB\n\nJam sekarang: *" . Carbon::now()->format('H:i') . "* WIB";
-        }
-
-        // Check if checked in today
+        // Check if checked in today (no strict time limit for checkout)
         $today = now()->format('Y-m-d');
         $attendance = Attendance::where('member_id', $member->id)
             ->where('tanggal', $today)
@@ -282,12 +272,23 @@ class WahaWebhookController extends Controller
         $workingHours = $checkIn->diffInHours($checkOut);
         $workingMinutes = $checkIn->diffInMinutes($checkOut) % 60;
 
+        // Get today's progress from Progress table
+        $progress = \App\Models\Progress::where('member_id', $member->id)
+            ->where('tanggal', $today)
+            ->first();
+
         $message = $config->message_success_check_out ?: "✅ *Check-out Berhasil!*\n\n";
         $message .= "Nama: *{$member->nama_lengkap}*\n";
         $message .= "Check-in: *{$checkIn->format('H:i')}* WIB\n";
         $message .= "Check-out: *{$checkOut->format('H:i')}* WIB\n";
-        $message .= "Durasi Kerja: *{$workingHours} jam {$workingMinutes} menit*\n\n";
-        $message .= "Terima kasih atas kerja keras kamu hari ini! 🎉";
+        $message .= "Durasi Kerja: *{$workingHours} jam {$workingMinutes} menit*\n";
+        
+        // Add progress info if exists
+        if ($progress && $progress->description) {
+            $message .= "\n📝 *Progress Hari Ini:*\n{$progress->description}\n";
+        }
+        
+        $message .= "\nTerima kasih atas kerja keras kamu hari ini! 🎉";
 
         return $message;
     }

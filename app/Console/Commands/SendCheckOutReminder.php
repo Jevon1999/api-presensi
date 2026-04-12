@@ -31,50 +31,77 @@ class SendCheckOutReminder extends Command
      */
     public function handle()
     {
-        $config = BotConfig::where('is_active', true)->first();
+        try {
+            $config = BotConfig::where('is_active', true)->first();
 
-        if (!$config || !$config->reminder_enabled) {
-            $this->info('Bot config not active or reminder disabled.');
-            return 0;
-        }
-
-        $today = Carbon::now()->format('Y-m-d');
-
-        // Get all active members who have checked in but not checked out today
-        $members = Member::where('status_aktif', true)
-            ->whereNotNull('no_hp')
-            ->whereHas('attendances', function ($query) use ($today) {
-                $query->where('tanggal', $today)
-                    ->whereNotNull('check_in_time')
-                    ->whereNull('check_out_time');
-            })
-            ->get();
-
-        $this->info("Found {$members->count()} members to remind for check-out.");
-
-        $template = $config->message_remind_check_out 
-            ?: "🔔 *Reminder Check-out*\n\nHalo {nama}! Jangan lupa untuk check-out sebelum pulang ya.\n\nKetik *keluar* untuk check-out kehadiran.\n\nTerima kasih atas kerja kerasmu hari ini! 🎉";
-
-        $sentCount = 0;
-        foreach ($members as $member) {
-            $chatId = $this->formatChatId($member->no_hp);
-            $message = str_replace('{nama}', $member->nama_lengkap, $template);
-            
-            if ($this->sendMessage($config, $chatId, $message)) {
-                $sentCount++;
-                $this->info("Reminder sent to: {$member->nama_lengkap}");
-            } else {
-                $this->error("Failed to send reminder to: {$member->nama_lengkap}");
+            if (!$config || !$config->reminder_enabled) {
+                $this->info('Bot config not active or reminder disabled.');
+                return 0;
             }
 
-            // Small delay to avoid overwhelming the API
-            usleep(500000); // 500ms delay
+            $today = Carbon::now()->format('Y-m-d');
+
+            // Get all active members who have checked in but not checked out today
+            $members = Member::where('status_aktif', true)
+                ->whereNotNull('no_hp')
+                ->whereHas('attendances', function ($query) use ($today) {
+                    $query->where('tanggal', $today)
+                        ->whereNotNull('check_in_time')
+                        ->whereNull('check_out_time')
+                        // Exclude members with izin/sakit status
+                        ->whereNotIn('status', ['izin', 'sakit', 'alpha']);
+                })
+                ->get();
+
+            Log::info("Check-out reminder: Found {$members->count()} members to remind");
+            $this->info("Found {$members->count()} members to remind for check-out.");
+
+            $template = $config->message_remind_check_out 
+                ?: "🔔 *Reminder Check-out*\n\nHalo {nama}! Jangan lupa untuk check-out sebelum pulang ya.\n\nKetik *keluar* untuk check-out kehadiran.\n\nTerima kasih atas kerja kerasmu hari ini! 🎉";
+
+            $sentCount = 0;
+            $failedCount = 0;
+            
+            foreach ($members as $member) {
+                try {
+                    $chatId = $this->formatChatId($member->no_hp);
+                    $message = str_replace('{nama}', $member->nama_lengkap, $template);
+                    
+                    if ($this->sendMessage($config, $chatId, $message)) {
+                        $sentCount++;
+                        Log::info("Check-out reminder sent", ['member' => $member->nama_lengkap]);
+                        $this->info("✓ Reminder sent to: {$member->nama_lengkap}");
+                    } else {
+                        $failedCount++;
+                        Log::warning("Failed to send check-out reminder", ['member' => $member->nama_lengkap]);
+                        $this->error("✗ Failed to send reminder to: {$member->nama_lengkap}");
+                    }
+
+                    // Small delay to avoid overwhelming the API
+                    usleep(500000); // 500ms delay
+                } catch (\Exception $e) {
+                    $failedCount++;
+                    Log::error("Error sending check-out reminder to {$member->nama_lengkap}: " . $e->getMessage());
+                    $this->error("✗ Error sending to {$member->nama_lengkap}: {$e->getMessage()}");
+                }
+            }
+
+            $this->info("Check-out reminder completed: {$sentCount} sent, {$failedCount} failed.");
+            Log::info("Check-out reminder completed", [
+                'sent' => $sentCount,
+                'failed' => $failedCount,
+                'total' => $members->count()
+            ]);
+
+            return 0;
+
+        } catch (\Exception $e) {
+            Log::error('Check-out reminder command error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->error('Command error: ' . $e->getMessage());
+            return 1;
         }
-
-        $this->info("Check-out reminder sent to {$sentCount} members.");
-        Log::info("Check-out reminder sent to {$sentCount} members.");
-
-        return 0;
     }
 
     /**

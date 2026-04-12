@@ -48,6 +48,27 @@ class Kernel extends ConsoleKernel
                     ->withoutOverlapping()
                     ->runInBackground();
             }
+            
+            // Schedule auto-checkout (3 hours after configured checkout time)
+            if ($config->reminder_check_out_time) {
+                $autoCheckoutTime = \Carbon\Carbon::parse($config->reminder_check_out_time)->addHours(3)->format('H:i');
+                $schedule->command('bot:auto-checkout')
+                    ->dailyAt($autoCheckoutTime)
+                    ->timezone($timezone)
+                    ->withoutOverlapping()
+                    ->runInBackground();
+            }
+            
+            // Schedule alpha/bolos status marking (run at checkout time)
+            // Member who didn't check-in by checkout time = alpha/bolos
+            if ($config->reminder_check_out_time) {
+                $checkoutTime = \Carbon\Carbon::parse($config->reminder_check_out_time)->format('H:i');
+                $schedule->command('bot:mark-alpha-status')
+                    ->dailyAt($checkoutTime)
+                    ->timezone($timezone)
+                    ->withoutOverlapping()
+                    ->runInBackground();
+            }
         }
         
         // Deactivate expired members (run daily just after midnight)
