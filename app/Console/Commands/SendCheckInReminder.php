@@ -41,10 +41,14 @@ class SendCheckInReminder extends Command
 
             $today = Carbon::now()->format('Y-m-d');
 
+            // First: Get all REJECTED members to explicitly exclude
+            $rejectedIds = Member::where('status', 'rejected')->pluck('id')->toArray();
+
             // Get all active members who haven't checked in today
             // This includes members with no attendance record at all
             $members = Member::where('status_aktif', true)
                 ->whereNotNull('no_hp')
+                ->where('status', '!=', 'rejected')  // Explicitly exclude rejected
                 ->where(function ($query) use ($today) {
                     // Members with no attendance record at all
                     $query->whereDoesntHave('attendances', function ($subQuery) use ($today) {
@@ -58,8 +62,28 @@ class SendCheckInReminder extends Command
                 })
                 ->get();
 
-            Log::info("Check-in reminder: Found {$members->count()} members to remind");
+            // DEBUG: Log all members being processed
+            $memberDetails = $members->map(function($m) use ($today) {
+                $attendance = $m->attendances()->where('tanggal', $today)->first();
+                return [
+                    'id' => $m->id,
+                    'nama' => $m->nama_lengkap,
+                    'no_hp' => $m->no_hp,
+                    'status_aktif' => $m->status_aktif,
+                    'status' => $m->status,
+                    'has_attendance_today' => $attendance ? 'yes' : 'no',
+                    'check_in_time' => $attendance ? $attendance->check_in_time : 'N/A'
+                ];
+            })->toArray();
+
+            Log::info("Check-in reminder: Found {$members->count()} members to remind", [
+                'excluded_rejected_count' => count($rejectedIds),
+                'members_detail' => $memberDetails
+            ]);
             $this->info("Found {$members->count()} members to remind for check-in.");
+            $this->table(['ID', 'Nama', 'Phone', 'Aktif', 'Status'], $members->map(function($m) {
+                return [$m->id, $m->nama_lengkap, $m->no_hp, $m->status_aktif ? 'Yes' : 'No', $m->status];
+            })->toArray());
 
             $template = $config->message_remind_check_in 
                 ?: "🔔 *Reminder Check-in*\n\nHalo {nama}! Jangan lupa untuk check-in hari ini ya.\n\nKetik *masuk* untuk check-in kehadiran.\n\nTerima kasih! 😊";

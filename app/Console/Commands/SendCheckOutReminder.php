@@ -41,20 +41,45 @@ class SendCheckOutReminder extends Command
 
             $today = Carbon::now()->format('Y-m-d');
 
+            // First: Get all REJECTED members to explicitly exclude
+            $rejectedIds = Member::where('status', 'rejected')->pluck('id')->toArray();
+
             // Get all active members who have checked in but not checked out today
             $members = Member::where('status_aktif', true)
                 ->whereNotNull('no_hp')
+                ->where('status', '!=', 'rejected')  // Explicitly exclude rejected
                 ->whereHas('attendances', function ($query) use ($today) {
                     $query->where('tanggal', $today)
                         ->whereNotNull('check_in_time')
                         ->whereNull('check_out_time')
-                        // Exclude members with izin/sakit status
+                        // Exclude members with izin/sakit/alpha status
                         ->whereNotIn('status', ['izin', 'sakit', 'alpha']);
                 })
                 ->get();
 
-            Log::info("Check-out reminder: Found {$members->count()} members to remind");
+            // DEBUG: Log all members being processed
+            $memberDetails = $members->map(function($m) use ($today) {
+                $attendance = $m->attendances()->where('tanggal', $today)->first();
+                return [
+                    'id' => $m->id,
+                    'nama' => $m->nama_lengkap,
+                    'no_hp' => $m->no_hp,
+                    'status_aktif' => $m->status_aktif,
+                    'status' => $m->status,
+                    'check_in' => $attendance ? $attendance->check_in_time : 'N/A',
+                    'check_out' => $attendance ? $attendance->check_out_time : 'N/A',
+                    'attendance_status' => $attendance ? $attendance->status : 'N/A'
+                ];
+            })->toArray();
+
+            Log::info("Check-out reminder: Found {$members->count()} members to remind", [
+                'excluded_rejected_count' => count($rejectedIds),
+                'members_detail' => $memberDetails
+            ]);
             $this->info("Found {$members->count()} members to remind for check-out.");
+            $this->table(['ID', 'Nama', 'Phone', 'Aktif', 'Status'], $members->map(function($m) {
+                return [$m->id, $m->nama_lengkap, $m->no_hp, $m->status_aktif ? 'Yes' : 'No', $m->status];
+            })->toArray());
 
             $template = $config->message_remind_check_out 
                 ?: "🔔 *Reminder Check-out*\n\nHalo {nama}! Jangan lupa untuk check-out sebelum pulang ya.\n\nKetik *keluar* untuk check-out kehadiran.\n\nTerima kasih atas kerja kerasmu hari ini! 🎉";
