@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\Attendance;
 use App\Models\BotConfig;
 use App\Models\Permission;
+use App\Models\Progress;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -94,8 +95,9 @@ class WahaWebhookController extends Controller
             // Process command
             $response = $this->processCommand($messageBody, $phoneNumber, $config);
 
-            // Send response via WAHA
-            $this->sendMessage($config, $from, $response);
+            // Send response via WAHA (format chatId properly)
+            $chatId = $this->formatChatId($phoneNumber);
+            $this->sendMessage($config, $chatId, $response);
 
             return response()->json(['status' => 'success']);
 
@@ -273,9 +275,16 @@ class WahaWebhookController extends Controller
         $workingMinutes = $checkIn->diffInMinutes($checkOut) % 60;
 
         // Get today's progress from Progress table
-        $progress = \App\Models\Progress::where('member_id', $member->id)
+        $progress = Progress::where('member_id', $member->id)
             ->where('tanggal', $today)
             ->first();
+
+        Log::info('Checkout progress check', [
+            'member_id' => $member->id,
+            'tanggal' => $today,
+            'has_progress' => $progress ? true : false,
+            'progress_desc' => $progress ? $progress->description : 'N/A'
+        ]);
 
         $message = $config->message_success_check_out ?: "✅ *Check-out Berhasil!*\n\n";
         $message .= "Nama: *{$member->nama_lengkap}*\n";
@@ -562,7 +571,7 @@ class WahaWebhookController extends Controller
                 $headers['X-Api-Key'] = $config->waha_api_key;
             }
             
-            $response = Http::withHeaders($headers)->post($url, [
+            $response = Http::withHeaders($headers)->timeout(30)->post($url, [
                 'session' => $config->waha_session_name ?: 'default',
                 'chatId' => $to,
                 'text' => $message
@@ -779,6 +788,28 @@ class WahaWebhookController extends Controller
             'allMembers_aktif' => Member::where('status_aktif', true)->pluck('no_hp')->toArray(),
         ]);
         return ['success' => false, 'message' => "❌ Nomor HP kamu belum terdaftar.\n\nSilakan hubungi admin untuk registrasi."];
+    }
+
+    /**
+     * Format phone number to WhatsApp @c.us format
+     */
+    private function formatChatId($phoneNumber)
+    {
+        // Remove all non-digit characters
+        $cleaned = preg_replace('/[^0-9]/', '', $phoneNumber);
+        
+        // If starts with 0, replace with 62
+        if (substr($cleaned, 0, 1) === '0') {
+            $cleaned = '62' . substr($cleaned, 1);
+        }
+        
+        // If doesn't start with 62, add 62 prefix
+        if (substr($cleaned, 0, 2) !== '62') {
+            $cleaned = '62' . $cleaned;
+        }
+        
+        // Return in @c.us format (WhatsApp standard)
+        return $cleaned . '@c.us';
     }
 
     /**

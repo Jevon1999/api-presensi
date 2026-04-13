@@ -141,16 +141,30 @@ class SendCheckOutReminder extends Command
                 $headers['X-Api-Key'] = $config->waha_api_key;
             }
             
-            $response = Http::withHeaders($headers)->post($url, [
+            $response = Http::withHeaders($headers)->timeout(30)->post($url, [
                 'session' => $config->waha_session_name ?: 'default',
                 'chatId' => $to,
                 'text' => $message
             ]);
 
-            return $response->successful();
+            if (!$response->successful()) {
+                Log::error('Check-out reminder API error', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'url' => $url,
+                    'to' => $to
+                ]);
+                return false;
+            }
 
-        } catch (\Exception $e) {
-            Log::error('Error sending check-out reminder: ' . $e->getMessage());
+            return true;
+
+        } catch (\Throwable $e) {
+            Log::error('Check-out reminder exception: ' . $e->getMessage(), [
+                'type' => get_class($e),
+                'to' => $to,
+                'trace' => $e->getTraceAsString()
+            ]);
             return false;
         }
     }
