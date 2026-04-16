@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\OfficeController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\BotConfigController;
+use App\Http\Controllers\Api\StatisticsController;
 
 use App\Http\Controllers\Api\MemberApplicationController;
 use App\Http\Controllers\Api\MemberDashboardController;
@@ -61,6 +62,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendances/{attendance}', [App\Http\Controllers\Api\AttendanceController::class, 'show']);
     Route::post('/attendances/{attendance}/reset', [App\Http\Controllers\Api\AttendanceController::class, 'reset']);
     Route::get('/attendances/report', [App\Http\Controllers\Api\AttendanceController::class, 'report']);
+
+    // Statistics (admin dashboard)
+    Route::get('/statistics', [StatisticsController::class, 'index']);
 
     // Bot config (singleton)
     Route::get('/bot-configs', [BotConfigController::class, 'index']);
