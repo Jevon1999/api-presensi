@@ -57,11 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('progresses', ProgressController::class);
     Route::apiResource('users', UserController::class);
 
-    // attendance endpoints
+    // attendance endpoints — route spesifik HARUS sebelum wildcard {attendance}
     Route::get('/attendances', [App\Http\Controllers\Api\AttendanceController::class, 'index']);
+    Route::get('/attendances/report', [App\Http\Controllers\Api\AttendanceController::class, 'report']);
     Route::get('/attendances/{attendance}', [App\Http\Controllers\Api\AttendanceController::class, 'show']);
     Route::post('/attendances/{attendance}/reset', [App\Http\Controllers\Api\AttendanceController::class, 'reset']);
-    Route::get('/attendances/report', [App\Http\Controllers\Api\AttendanceController::class, 'report']);
 
     // Statistics (admin dashboard)
     Route::get('/statistics', [StatisticsController::class, 'index']);
