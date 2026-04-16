@@ -35,7 +35,7 @@ class StatisticsController extends Controller
         $base = fn() => DB::table('attendances')
             ->whereBetween('tanggal', [$startDate, $endDate])
             ->whereIn('member_id', $validMemberIds)
-            ->whereNull('deleted_at');
+            ->whereNull('attendances.deleted_at');
 
         // ─────────────────────────────────────────────────────────
         // 1. SUMMARY
