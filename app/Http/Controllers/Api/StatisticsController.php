@@ -43,13 +43,13 @@ class StatisticsController extends Controller
         $summaryRaw = $base()
             ->select([
                 DB::raw('COUNT(*) as total'),
-                DB::raw('SUM(status = "hadir") as hadir'),
-                DB::raw('SUM(status = "izin")  as izin'),
-                DB::raw('SUM(status = "sakit") as sakit'),
-                DB::raw('SUM(status = "alpha") as alpha'),
-                DB::raw('SUM(work_type = "wfo") as wfo'),
-                DB::raw('SUM(work_type = "wfa") as wfa'),
-                DB::raw('SUM(is_late = 1)       as terlambat'),
+                DB::raw("SUM(CASE WHEN status = 'hadir' THEN 1 ELSE 0 END) as hadir"),
+                DB::raw("SUM(CASE WHEN status = 'izin' THEN 1 ELSE 0 END)  as izin"),
+                DB::raw("SUM(CASE WHEN status = 'sakit' THEN 1 ELSE 0 END) as sakit"),
+                DB::raw("SUM(CASE WHEN status = 'alpha' THEN 1 ELSE 0 END) as alpha"),
+                DB::raw("SUM(CASE WHEN work_type = 'wfo' THEN 1 ELSE 0 END) as wfo"),
+                DB::raw("SUM(CASE WHEN work_type = 'wfa' THEN 1 ELSE 0 END) as wfa"),
+                DB::raw("SUM(CASE WHEN is_late = 1 THEN 1 ELSE 0 END)       as terlambat"),
             ])
             ->first();
 
@@ -70,10 +70,10 @@ class StatisticsController extends Controller
         $trendRaw = $base()
             ->select([
                 DB::raw('DATE(tanggal) as date'),
-                DB::raw('SUM(status = "hadir") as hadir'),
-                DB::raw('SUM(status = "alpha") as alpha'),
-                DB::raw('SUM(status = "izin")  as izin'),
-                DB::raw('SUM(status = "sakit") as sakit'),
+                DB::raw("SUM(CASE WHEN status = 'hadir' THEN 1 ELSE 0 END) as hadir"),
+                DB::raw("SUM(CASE WHEN status = 'alpha' THEN 1 ELSE 0 END) as alpha"),
+                DB::raw("SUM(CASE WHEN status = 'izin' THEN 1 ELSE 0 END)  as izin"),
+                DB::raw("SUM(CASE WHEN status = 'sakit' THEN 1 ELSE 0 END) as sakit"),
             ])
             ->groupBy(DB::raw('DATE(tanggal)'))
             ->orderBy('date')
@@ -97,13 +97,13 @@ class StatisticsController extends Controller
                 DB::raw('members.asal_sekolah as sekolah_asli'),
                 DB::raw('COUNT(DISTINCT attendances.member_id) as total_siswa'),
                 DB::raw('COUNT(*) as total_absensi'),
-                DB::raw('SUM(attendances.status = "hadir") as hadir'),
-                DB::raw('SUM(attendances.status = "alpha") as alpha'),
-                DB::raw('SUM(attendances.status = "izin")  as izin'),
-                DB::raw('SUM(attendances.status = "sakit") as sakit'),
-                DB::raw('SUM(attendances.is_late = 1)      as terlambat'),
-                DB::raw('SUM(attendances.work_type = "wfo") as wfo'),
-                DB::raw('SUM(attendances.work_type = "wfa") as wfa'),
+                DB::raw("SUM(CASE WHEN attendances.status = 'hadir' THEN 1 ELSE 0 END) as hadir"),
+                DB::raw("SUM(CASE WHEN attendances.status = 'alpha' THEN 1 ELSE 0 END) as alpha"),
+                DB::raw("SUM(CASE WHEN attendances.status = 'izin' THEN 1 ELSE 0 END)  as izin"),
+                DB::raw("SUM(CASE WHEN attendances.status = 'sakit' THEN 1 ELSE 0 END) as sakit"),
+                DB::raw("SUM(CASE WHEN attendances.is_late = 1 THEN 1 ELSE 0 END)      as terlambat"),
+                DB::raw("SUM(CASE WHEN attendances.work_type = 'wfo' THEN 1 ELSE 0 END) as wfo"),
+                DB::raw("SUM(CASE WHEN attendances.work_type = 'wfa' THEN 1 ELSE 0 END) as wfa"),
             ])
             ->groupBy(DB::raw('TRIM(LOWER(members.asal_sekolah))'), 'members.asal_sekolah')
             ->orderByDesc('hadir')
