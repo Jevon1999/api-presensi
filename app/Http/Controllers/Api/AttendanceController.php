@@ -41,6 +41,13 @@ class AttendanceController extends Controller
      *         @OA\Schema(type="string", enum={"hadir", "izin", "sakit", "alpha"})
      *     ),
      *     @OA\Parameter(
+     *         name="work_type",
+     *         in="query",
+     *         description="Filter by work type",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"wfo", "wfa"})
+     *     ),
+     *     @OA\Parameter(
      *         name="office_id",
      *         in="query",
      *         description="Filter by office ID",
@@ -77,6 +84,11 @@ class AttendanceController extends Controller
         // filter by status
         if ($request->has('status')) {
             $query->where('status', $request->status);
+        }
+
+        // filter by work_type
+        if ($request->has('work_type')) {
+            $query->where('work_type', $request->work_type);
         }
 
         // filter by office
@@ -155,8 +167,12 @@ class AttendanceController extends Controller
     public function checkIn(Request $request)
     {
         $validated = $request->validate([
-            'no_hp' => 'required|string',
+            'no_hp'       => 'required|string',
             'late_reason' => 'nullable|string|max:500',
+            'work_type'   => 'required|in:wfo,wfa',
+        ], [
+            'work_type.required' => 'Harap sertakan tipe kehadiran: wfo atau wfa. Contoh: hadir wfo',
+            'work_type.in'       => 'Tipe kehadiran tidak valid. Gunakan: wfo atau wfa',
         ]);
 
         // Normalize phone number format
@@ -246,9 +262,10 @@ class AttendanceController extends Controller
         
         $attendanceData = [
             'check_in_time' => $checkInTime,
-            'status' => 'hadir',
-            'is_late' => $isLate,
-            'late_reason' => $isLate ? ($validated['late_reason'] ?? null) : null,
+            'status'        => 'hadir',
+            'is_late'       => $isLate,
+            'late_reason'   => $isLate ? ($validated['late_reason'] ?? null) : null,
+            'work_type'     => $validated['work_type'],
         ];
         
         if ($existingAttendance) {
@@ -270,11 +287,12 @@ class AttendanceController extends Controller
                     'office' => $member->office->name
                 ],
                 'attendance' => [
-                    'tanggal' => $attendance->tanggal->format('d/m/Y'),
+                    'tanggal'       => $attendance->tanggal->format('d/m/Y'),
                     'check_in_time' => Carbon::parse($attendance->check_in_time)->format('H:i'),
-                    'status' => $attendance->status,
-                    'is_late' => $isLate,
-                    'late_reason' => $attendance->late_reason,
+                    'status'        => $attendance->status,
+                    'work_type'     => $attendance->work_type,
+                    'is_late'       => $isLate,
+                    'late_reason'   => $attendance->late_reason,
                 ]
             ]
         ];
@@ -451,10 +469,11 @@ class AttendanceController extends Controller
     public function reset(Request $request, Attendance $attendance)
     {
         $validated = $request->validate([
-            'status' => 'required|in:hadir,izin,sakit,alpha',
-            'check_in_time' => 'nullable|date_format:H:i',
+            'status'         => 'required|in:hadir,izin,sakit,alpha',
+            'check_in_time'  => 'nullable|date_format:H:i',
             'check_out_time' => 'nullable|date_format:H:i',
-            'reason' => 'required|string|min:10'
+            'work_type'      => 'nullable|in:wfo,wfa',
+            'reason'         => 'required|string|min:10'
         ]);
 
         // bikin reset log
@@ -471,9 +490,10 @@ class AttendanceController extends Controller
 
         // update attendance
         $attendance->update([
-            'status' => $validated['status'],
-            'check_in_time' => $validated['check_in_time'] ?? $attendance->check_in_time,
+            'status'         => $validated['status'],
+            'check_in_time'  => $validated['check_in_time'] ?? $attendance->check_in_time,
             'check_out_time' => $validated['check_out_time'] ?? $attendance->check_out_time,
+            'work_type'      => $validated['work_type'] ?? $attendance->work_type,
         ]);
 
         return response()->json([
@@ -630,10 +650,12 @@ class AttendanceController extends Controller
         // hitung statistik
         $stats = [
             'total_days' => $attendances->count(),
-            'hadir' => $attendances->where('status', 'hadir')->count(),
-            'izin' => $attendances->where('status', 'izin')->count(),
-            'sakit' => $attendances->where('status', 'sakit')->count(),
-            'alpha' => $attendances->where('status', 'alpha')->count(),
+            'hadir'      => $attendances->where('status', 'hadir')->count(),
+            'wfo'        => $attendances->where('work_type', 'wfo')->count(),
+            'wfa'        => $attendances->where('work_type', 'wfa')->count(),
+            'izin'       => $attendances->where('status', 'izin')->count(),
+            'sakit'      => $attendances->where('status', 'sakit')->count(),
+            'alpha'      => $attendances->where('status', 'alpha')->count(),
         ];
 
         return response()->json([
