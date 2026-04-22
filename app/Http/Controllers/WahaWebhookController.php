@@ -19,6 +19,10 @@ class WahaWebhookController extends Controller
      */
     public function handle(Request $request)
     {
+        $phoneNumber = null;
+        $from = null;
+        $config = null;
+        
         try {
             Log::info('WAHA Webhook received', $request->all());
 
@@ -72,6 +76,7 @@ class WahaWebhookController extends Controller
                 'from' => $from,
                 'remoteJidAlt' => $payload['_data']['key']['remoteJidAlt'] ?? null,
                 'extracted_phoneNumber' => $phoneNumber,
+                'messageBody' => $messageBody,
             ]);
 
             // Get bot config
@@ -93,18 +98,63 @@ class WahaWebhookController extends Controller
             }
 
             // Process command
-            $response = $this->processCommand($messageBody, $phoneNumber, $config);
+            try {
+                $response = $this->processCommand($messageBody, $phoneNumber, $config);
+                Log::info('Command processed', [
+                    'phoneNumber' => $phoneNumber,
+                    'message' => $messageBody,
+                    'response_preview' => substr($response, 0, 100)
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Error processing command: ' . $e->getMessage(), [
+                    'phoneNumber' => $phoneNumber,
+                    'message' => $messageBody,
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $response = "❌ Terjadi kesalahan saat memproses perintah.\n\nSilakan coba lagi atau ketik *help* untuk bantuan.";
+            }
 
             // Send response via WAHA (format chatId properly)
-            $chatId = $this->formatChatId($phoneNumber);
-            $this->sendMessage($config, $chatId, $response);
+            try {
+                $chatId = $this->formatChatId($phoneNumber);
+                $sendResult = $this->sendMessage($config, $chatId, $response);
+                
+                if (!$sendResult) {
+                    Log::error('Failed to send message to WAHA', [
+                        'phoneNumber' => $phoneNumber,
+                        'chatId' => $chatId
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Error sending message: ' . $e->getMessage(), [
+                    'phoneNumber' => $phoneNumber,
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
 
             return response()->json(['status' => 'success']);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Webhook error: ' . $e->getMessage(), [
+                'phoneNumber' => $phoneNumber,
+                'from' => $from,
                 'trace' => $e->getTraceAsString()
             ]);
+            
+            // Try to send error message to user if possible
+            if ($phoneNumber && $config) {
+                try {
+                    $chatId = $this->formatChatId($phoneNumber);
+                    $errorMsg = "❌ Terjadi kesalahan teknis.\n\nSilakan hubungi admin atau coba lagi nanti.";
+                    $this->sendMessage($config, $chatId, $errorMsg);
+                } catch (\Throwable $innerE) {
+                    Log::error('Could not send error message to user', [
+                        'phoneNumber' => $phoneNumber,
+                        'error' => $innerE->getMessage()
+                    ]);
+                }
+            }
+            
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
@@ -118,13 +168,13 @@ class WahaWebhookController extends Controller
         $message = strtolower($message);
 
         // Check-in commands
-        if (in_array($message, ['masuk', 'checkin', 'check in', 'absen', 'hadir'])) {
-            return $this->handleCheckIn($phoneNumber, $config);
+        if (in_array($message, ['masuk', 'checkin', 'check in', 'absen', 'hadir']) || preg_match('/^masuk\s+(wfa|wfo)/i', $originalMessage) || preg_match('/^absen\s+(wfa|wfo)/i', $originalMessage)) {
+            return $this->handleCheckIn($phoneNumber, $config, $originalMessage);
         }
 
         // Check-out commands
-        if (in_array($message, ['keluar', 'checkout', 'check out', 'pulang'])) {
-            return $this->handleCheckOut($phoneNumber, $config);
+        if (in_array($message, ['keluar', 'checkout', 'check out', 'pulang']) || preg_match('/^keluar\s+/i', $originalMessage) || preg_match('/^pulang\s+/i', $originalMessage)) {
+            return $this->handleCheckOut($phoneNumber, $config, $originalMessage);
         }
 
         // Status command
@@ -156,7 +206,7 @@ class WahaWebhookController extends Controller
     /**
      * Handle check-in
      */
-    private function handleCheckIn($phoneNumber, $config)
+    private function handleCheckIn($phoneNumber, $config, $originalMessage = '')
     {
         // Find member with flexible format matching
         $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
@@ -164,6 +214,23 @@ class WahaWebhookController extends Controller
             return $memberCheck['message'];
         }
         $member = $memberCheck['member'];
+
+        // Parse work_type (WFA/WFO) dari message
+        // Supported: "masuk wfa", "masuk wfo", "absen WFA", dll
+        $workType = 'wfo'; // default
+        $lateReason = '';
+        
+        $messageLower = strtolower($originalMessage);
+        if (preg_match('/\bwfa\b/', $messageLower)) {
+            $workType = 'wfa';
+        } elseif (preg_match('/\bwfo\b/', $messageLower)) {
+            $workType = 'wfo';
+        }
+        
+        // Parse late reason jika ada (format: "masuk wfa alasan=...")
+        if (preg_match('/alasan=(.+?)(?:\s|$)/i', $originalMessage, $matches)) {
+            $lateReason = trim($matches[1]);
+        }
 
         // Check if current time is within attendance hours
         $currentTime = Carbon::now()->format('H:i:s');
@@ -200,7 +267,13 @@ class WahaWebhookController extends Controller
             if ($currentTime->gt($lateThreshold)) {
                 $isLate = true;
                 $thresholdFormatted = $lateThreshold->format('H:i');
-                $lateMessage = "\n\n⚠️ *Kamu terlambat!* Batas check-in adalah {$thresholdFormatted} WIB.";
+                
+                // If late but no reason provided, ask for reason
+                if (!$lateReason) {
+                    return "⚠️ *Kamu Check-in Terlambat!*\n\nBatas check-in: *{$thresholdFormatted}* WIB\nWaktu sekarang: *" . Carbon::now()->format('H:i') . "* WIB\n\n📝 *Silakan berikan alasan keterlambatan dengan format:*\n\n*masuk {$workType} alasan=<alasan_kamu>*\n\nContoh:\n*masuk wfo alasan=ada meeting penting*\n*masuk wfa alasan=update sistem server*";
+                }
+                
+                $lateMessage = "\n\n⚠️ *Kamu terlambat!* Batas check-in adalah {$thresholdFormatted} WIB.\nAlasan: {$lateReason}";
             }
         }
         
@@ -208,7 +281,9 @@ class WahaWebhookController extends Controller
             $attendance->update([
                 'check_in_time' => $checkInTime,
                 'status' => 'hadir',
-                'is_late' => $isLate
+                'is_late' => $isLate,
+                'work_type' => $workType,
+                'late_reason' => $lateReason
             ]);
         } else {
             $attendance = Attendance::create([
@@ -216,14 +291,19 @@ class WahaWebhookController extends Controller
                 'tanggal' => $today,
                 'check_in_time' => $checkInTime,
                 'status' => 'hadir',
-                'is_late' => $isLate
+                'is_late' => $isLate,
+                'work_type' => $workType,
+                'late_reason' => $lateReason
             ]);
         }
 
         $formattedTime = Carbon::parse($checkInTime)->format('H:i');
+        $workTypeDisplay = strtoupper($workType);
+        
         $message = $config->message_success_check_in ?: "✅ *Check-in Berhasil!*\n\n";
         $message .= "Nama: *{$member->nama_lengkap}*\n";
         $message .= "Kantor: *{$member->office->name}*\n";
+        $message .= "Tipe Kerja: *{$workTypeDisplay}*\n";
         $message .= "Waktu: *{$formattedTime}* WIB\n";
         $message .= "Tanggal: " . now()->format('d/m/Y');
         $message .= $lateMessage;
@@ -236,9 +316,10 @@ class WahaWebhookController extends Controller
 
     /**
      * Handle check-out
-     * Now allows checkout anytime (for overtime scenarios)
+     * Allows checkout anytime with progress description
+     * Format: "keluar [progress description]" or just "keluar"
      */
-    private function handleCheckOut($phoneNumber, $config)
+    private function handleCheckOut($phoneNumber, $config, $originalMessage = '')
     {
         // Find member with flexible format matching
         $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
@@ -246,6 +327,12 @@ class WahaWebhookController extends Controller
             return $memberCheck['message'];
         }
         $member = $memberCheck['member'];
+
+        // Parse progress from message (everything after "keluar " or "pulang ")
+        $progressDescription = '';
+        if (preg_match('/^(?:keluar|pulang)\s+(.+)$/i', $originalMessage, $matches)) {
+            $progressDescription = trim($matches[1]);
+        }
 
         // Check if checked in today (no strict time limit for checkout)
         $today = now()->format('Y-m-d');
@@ -268,6 +355,20 @@ class WahaWebhookController extends Controller
             'check_out_time' => $checkOutTime
         ]);
 
+        // Save progress if provided
+        if ($progressDescription) {
+            Progress::updateOrCreate(
+                ['member_id' => $member->id, 'tanggal' => $today],
+                ['description' => $progressDescription]
+            );
+            
+            Log::info('Progress saved at checkout', [
+                'member_id' => $member->id,
+                'tanggal' => $today,
+                'progress' => $progressDescription
+            ]);
+        }
+
         // Calculate working hours
         $checkIn = Carbon::parse($attendance->check_in_time);
         $checkOut = Carbon::parse($checkOutTime);
@@ -286,8 +387,11 @@ class WahaWebhookController extends Controller
             'progress_desc' => $progress ? $progress->description : 'N/A'
         ]);
 
+        $workTypeDisplay = $attendance->work_type ? strtoupper($attendance->work_type) : 'N/A';
+
         $message = $config->message_success_check_out ?: "✅ *Check-out Berhasil!*\n\n";
         $message .= "Nama: *{$member->nama_lengkap}*\n";
+        $message .= "Tipe Kerja: *{$workTypeDisplay}*\n";
         $message .= "Check-in: *{$checkIn->format('H:i')}* WIB\n";
         $message .= "Check-out: *{$checkOut->format('H:i')}* WIB\n";
         $message .= "Durasi Kerja: *{$workingHours} jam {$workingMinutes} menit*\n";
@@ -295,6 +399,9 @@ class WahaWebhookController extends Controller
         // Add progress info if exists
         if ($progress && $progress->description) {
             $message .= "\n📝 *Progress Hari Ini:*\n{$progress->description}\n";
+        } else {
+            $message .= "\n💡 *Tips:* Gunakan format *keluar [keterangan progress]* untuk langsung menyimpan progress hari ini.\n";
+            $message .= "Contoh: *keluar Membuat laporan web dan update database*\n";
         }
         
         $message .= "\nTerima kasih atas kerja keras kamu hari ini! 🎉";
@@ -346,11 +453,17 @@ class WahaWebhookController extends Controller
             $message .= "Silakan ketik *masuk* untuk check-in.";
         } else {
             $checkInTime = Carbon::parse($attendance->check_in_time)->format('H:i');
-            $message .= "✅ Check-in: *{$checkInTime}* WIB";
+            $workTypeDisplay = $attendance->work_type ? strtoupper($attendance->work_type) : 'N/A';
             
-            // Show if late
+            $message .= "✅ Check-in: *{$checkInTime}* WIB";
+            $message .= " ({$workTypeDisplay})";
+            
+            // Show if late with reason
             if ($attendance->is_late) {
-                $message .= " ⚠️ (Terlambat)";
+                $message .= " ⚠️ *Terlambat*";
+                if ($attendance->late_reason) {
+                    $message .= "\n   Alasan: {$attendance->late_reason}";
+                }
             }
             $message .= "\n";
 
@@ -363,6 +476,14 @@ class WahaWebhookController extends Controller
                 
                 $message .= "✅ Check-out: *{$checkOutTime}* WIB\n";
                 $message .= "⏱️ Durasi: *{$workingHours} jam {$workingMinutes} menit*\n";
+                
+                // Show progress if exists
+                $progress = Progress::where('member_id', $member->id)
+                    ->where('tanggal', $today)
+                    ->first();
+                if ($progress && $progress->description) {
+                    $message .= "\n📝 *Progress:* {$progress->description}";
+                }
             } else {
                 $message .= "❌ Check-out: *Belum*\n\n";
                 $message .= "Ketik *keluar* untuk check-out.";
@@ -382,11 +503,18 @@ class WahaWebhookController extends Controller
         
         $message .= "📝 *DAFTAR PERINTAH*\n\n";
         
-        $message .= "🟢 *masuk*\n";
-        $message .= "    └ Check-in kehadiran\n\n";
+        $message .= "🟢 *masuk* atau *masuk WFA* atau *masuk WFO*\n";
+        $message .= "    └ Check-in kehadiran\n";
+        $message .= "    └ Contoh: masuk wfo, masuk wfa\n\n";
         
-        $message .= "🔴 *keluar*\n";
-        $message .= "    └ Check-out kehadiran\n\n";
+        $message .= "⚠️ *Jika Terlambat, sertakan alasan:*\n";
+        $message .= "    *masuk WFO alasan=ada meeting*\n";
+        $message .= "    *masuk WFA alasan=update server*\n\n";
+        
+        $message .= "🔴 *keluar* atau *pulang* [progress]\n";
+        $message .= "    └ Check-out kehadiran\n";
+        $message .= "    └ Format: keluar [keterangan pekerjaan hari ini]\n";
+        $message .= "    └ Contoh: keluar membuat laporan web\n\n";
         
         $message .= "📊 *status*\n";
         $message .= "    └ Cek status kehadiran hari ini\n\n";
