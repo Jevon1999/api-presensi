@@ -61,7 +61,11 @@ class ProgressController extends Controller
             $query->whereDate('tanggal', '<=', $request->end_date);
         }
 
-        $progresses = $query->latest('tanggal')->paginate(20);
+        if ($request->has('tipe')) {
+            $query->where('tipe', $request->tipe);
+        }
+
+        $progresses = $query->latest('tanggal')->paginate(10);
         return response()->json($progresses);
     }
 
@@ -96,24 +100,40 @@ class ProgressController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'member_id' => 'required|string|exists:members,id',
-            'tanggal' => 'required|date',
-            'description' => 'required|string',
+            'member_id'   => 'required|string|exists:members,id',
+            'tanggal'     => 'required|date',
+            'tipe'        => 'required|in:hadir,sakit,izin',
+            'description' => [
+                'required',
+                'string',
+                'min:3',
+                function ($attribute, $value, $fail) use ($request) {
+                    $tipe = $request->tipe;
+                    if ($tipe === 'sakit' && trim($value) === 'Pulang') {
+                        $fail('Keterangan sakit harus diisi dengan alasan yang sesuai.');
+                    }
+                },
+            ],
         ]);
+
+        // Jika izin dan description kosong/default, set ke "Pulang"
+        if ($validated['tipe'] === 'izin' && empty(trim($validated['description']))) {
+            $validated['description'] = 'Pulang';
+        }
 
         $exists = Progress::where('member_id', $validated['member_id'])
             ->where('tanggal', $validated['tanggal'])
             ->exists();
 
         if ($exists) {
-            return response()->json(['message' => 'Progress untuk tanggal ini sudah ada.'], 422);
+            return response()->json(['message' => 'Laporan untuk tanggal ini sudah ada.'], 422);
         }
 
         $progress = Progress::create($validated);
         $progress->load('member');
         return response()->json([
-            'message' => 'Progress berhasil dibuat',
-            'data' => $progress
+            'message' => 'Laporan berhasil disimpan',
+            'data'    => $progress
         ], 201);
     }
 
@@ -186,14 +206,15 @@ class ProgressController extends Controller
     public function update(Request $request, Progress $progress)
     {
         $validated = $request->validate([
-            'description' => 'required|string',
+            'tipe'        => 'sometimes|in:hadir,sakit,izin',
+            'description' => 'required|string|min:3',
         ]);
 
         $progress->update($validated);
-        
+
         return response()->json([
-            'message' => 'Progress berhasil diupdate',
-            'data' => $progress
+            'message' => 'Laporan berhasil diupdate',
+            'data'    => $progress
         ]);
     }
 

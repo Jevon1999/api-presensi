@@ -81,7 +81,7 @@ class MemberController extends Controller
             });
         }
 
-        $members = $query->latest()->paginate(20);
+        $members = $query->latest()->paginate(10);
         
         return response()->json($members);
     }

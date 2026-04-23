@@ -105,7 +105,7 @@ class AttendanceController extends Controller
 
         $attendances = $query->latest('tanggal')
             ->latest('check_in_time')
-            ->paginate(50);
+            ->paginate(10);
 
         return response()->json($attendances);
     }

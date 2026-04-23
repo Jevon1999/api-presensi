@@ -15,11 +15,13 @@ class Progress extends Model
     protected $fillable = [
         'member_id',
         'tanggal',
+        'tipe',
         'description',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
+        'tipe'    => 'string',
     ];
 
     //relasi
