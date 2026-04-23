@@ -646,10 +646,12 @@ class AttendanceController extends Controller
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'office_id' => 'nullable|exists:offices,id',
-            'member_id' => 'nullable|exists:members,id'
+            'member_id' => 'nullable|exists:members,id',
+            'status' => 'nullable|in:hadir,alpha,izin,sakit,telat',
+            'per_page' => 'nullable|string'
         ]);
 
-        $query = Attendance::with('member.office')
+        $query = Attendance::with(['member.office', 'permissions'])
             ->whereBetween('tanggal', [$validated['start_date'], $validated['end_date']]);
 
         if (isset($validated['member_id'])) {
@@ -662,18 +664,36 @@ class AttendanceController extends Controller
             });
         }
 
-        $attendances = $query->get();
+        if (isset($validated['status'])) {
+            if ($validated['status'] === 'telat') {
+                $query->where('status', 'hadir')->where('is_late', true);
+            } else {
+                $query->where('status', $validated['status']);
+            }
+        }
 
-        // hitung statistik
+        // Hitung statistik secara keseluruhan (sesuai filter date, office, member, tapi ABAIKAN status agar summary tetap relevan, 
+        // atau gunakan query dengan filter status. Lebih masuk akal jika summary mengikuti SEMUA filter termasuk status).
+        $statsQuery = clone $query;
+        $allForStats = $statsQuery->get();
+
         $stats = [
-            'total_days' => $attendances->count(),
-            'hadir'      => $attendances->where('status', 'hadir')->count(),
-            'wfo'        => $attendances->where('work_type', 'wfo')->count(),
-            'wfa'        => $attendances->where('work_type', 'wfa')->count(),
-            'izin'       => $attendances->where('status', 'izin')->count(),
-            'sakit'      => $attendances->where('status', 'sakit')->count(),
-            'alpha'      => $attendances->where('status', 'alpha')->count(),
+            'total_days' => $allForStats->count(),
+            'hadir'      => $allForStats->where('status', 'hadir')->count(),
+            'wfo'        => $allForStats->where('work_type', 'wfo')->count(),
+            'wfa'        => $allForStats->where('work_type', 'wfa')->count(),
+            'izin'       => $allForStats->where('status', 'izin')->count(),
+            'sakit'      => $allForStats->where('status', 'sakit')->count(),
+            'alpha'      => $allForStats->where('status', 'alpha')->count(),
         ];
+
+        // Pagination atau GetAll
+        if (isset($validated['per_page']) && $validated['per_page'] === 'all') {
+            $attendances = $query->orderBy('tanggal', 'asc')->get();
+        } else {
+            $perPage = is_numeric($request->per_page) ? $request->per_page : 50;
+            $attendances = $query->orderBy('tanggal', 'desc')->paginate($perPage);
+        }
 
         return response()->json([
             'period' => [
