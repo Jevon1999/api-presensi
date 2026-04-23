@@ -33,6 +33,8 @@ class BotConfigController extends Controller
             'checkout_reminder_time'     => 'sometimes|nullable|string',
             'check_in_late_threshold'    => 'sometimes|nullable|string',
             'require_late_reason'        => 'sometimes|boolean',
+            'working_days'               => 'sometimes|array',
+            'working_days.*'             => 'string|in:1,2,3,4,5,6,7',
             'message_remind_check_in'    => 'sometimes|nullable|string',
             'message_remind_check_out'   => 'sometimes|nullable|string',
             'message_success_check_in'   => 'sometimes|nullable|string',
@@ -69,6 +71,9 @@ class BotConfigController extends Controller
         }
         if (isset($validated['require_late_reason'])) {
             $data['require_late_reason'] = (bool) $validated['require_late_reason'];
+        }
+        if (array_key_exists('working_days', $validated)) {
+            $data['working_days'] = $validated['working_days'];
         }
 
         // Message templates

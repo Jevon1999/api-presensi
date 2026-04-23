@@ -35,10 +35,12 @@ class BotConfig extends Model
         'message_already_checked_in',
         'message_error',
         'is_active',
+        'working_days',
     ];
     
     protected $casts = [
         'webhook_events'             => 'array',
+        'working_days'               => 'array',
         'reminder_check_in_time'     => 'string',
         'reminder_check_out_time'    => 'string',
         'check_in_late_threshold'    => 'string',
@@ -70,6 +72,7 @@ class BotConfig extends Model
             'checkout_reminder_time'     => $this->reminder_check_out_time,
             'check_in_late_threshold'    => $this->check_in_late_threshold,
             'require_late_reason'        => $this->require_late_reason,
+            'working_days'               => $this->working_days ?? ['1','2','3','4','5'],
             'message_remind_check_in'    => $this->message_remind_check_in,
             'message_remind_check_out'   => $this->message_remind_check_out,
             'message_success_check_in'   => $this->message_success_check_in,

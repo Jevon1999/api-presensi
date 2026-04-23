@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\BotConfigController;
 use App\Http\Controllers\Api\StatisticsController;
+use App\Http\Controllers\Api\HolidayController;
 
 use App\Http\Controllers\Api\MemberApplicationController;
 use App\Http\Controllers\Api\MemberDashboardController;
@@ -69,6 +70,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Bot config (singleton)
     Route::get('/bot-configs', [BotConfigController::class, 'index']);
     Route::put('/bot-configs', [BotConfigController::class, 'update']);
+
+    // Holidays — hari libur nasional
+    Route::get('/holidays', [HolidayController::class, 'index']);
+    Route::post('/holidays/sync', [HolidayController::class, 'sync']);
+    Route::post('/holidays', [HolidayController::class, 'store']);
+    Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy']);
+    Route::get('/working-day/status', [HolidayController::class, 'dayStatus']);
 });
 
 Route::middleware('bot.auth')->group(function () {

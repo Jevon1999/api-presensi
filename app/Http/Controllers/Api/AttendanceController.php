@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Member;
 use App\Models\OfficeLocation;
+use App\Services\WorkingDayService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -13,6 +14,10 @@ use App\Models\BotConfig;
 
 class AttendanceController extends Controller
 {
+    public function __construct(
+        private WorkingDayService $workingDayService,
+    ) {}
+
     /**
      * @OA\Get(
      *     path="/api/attendances",
@@ -166,6 +171,18 @@ class AttendanceController extends Controller
      */
     public function checkIn(Request $request)
     {
+        // ── Cek hari kerja sebelum apapun ──
+        $dayStatus = $this->workingDayService->getDayStatus();
+        if (!$dayStatus['is_working']) {
+            if ($dayStatus['reason'] === 'holiday') {
+                $msg = "Hari ini adalah hari libur nasional: *{$dayStatus['detail']}*. Check-in tidak diperlukan. Selamat beristirahat! 🏖️";
+            } else {
+                // weekend
+                $msg = "Hari ini adalah *{$dayStatus['day_name']}* (hari libur). Check-in tidak diperlukan. Sampai jumpa hari kerja! 😊";
+            }
+            return response()->json(['message' => $msg, 'is_working_day' => false], 403);
+        }
+
         $validated = $request->validate([
             'no_hp'       => 'required|string',
             'late_reason' => 'nullable|string|max:500',
