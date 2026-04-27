@@ -42,6 +42,8 @@ class BotConfigController extends Controller
             'message_error'              => 'sometimes|nullable|string',
             'message_greeting'           => 'sometimes|nullable|string',
             'message_remind_late'        => 'sometimes|nullable|string',
+            'waha_api_key'               => 'sometimes|nullable|string',
+            'waha_session_name'          => 'sometimes|nullable|string',
         ]);
 
         $config = BotConfig::config();
@@ -81,6 +83,14 @@ class BotConfigController extends Controller
             if (array_key_exists($field, $validated)) {
                 $data[$field] = $validated[$field];
             }
+        }
+
+        // WAHA connection settings
+        if (array_key_exists('waha_api_key', $validated)) {
+            $data['waha_api_key'] = $validated['waha_api_key'];
+        }
+        if (array_key_exists('waha_session_name', $validated)) {
+            $data['waha_session_name'] = $validated['waha_session_name'];
         }
 
         $config->update($data);

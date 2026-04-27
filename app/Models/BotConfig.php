@@ -65,6 +65,8 @@ class BotConfig extends Model
     public function toFrontend(): array
     {
         return [
+            'waha_api_key'               => $this->waha_api_key,
+            'waha_session_name'          => $this->waha_session_name,
             'is_active'                  => $this->is_active,
             'reminder_enabled'           => $this->reminder_enabled,
             'reminder_time'              => $this->reminder_check_in_time,
