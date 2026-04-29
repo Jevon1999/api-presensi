@@ -20,7 +20,7 @@ class Progress extends Model
     ];
 
     protected $casts = [
-        'tanggal' => 'date',
+        'tanggal' => 'date:Y-m-d',
         'tipe'    => 'string',
     ];
 
