@@ -233,7 +233,8 @@ class WahaWebhookController extends Controller
         }
         
         // Parse late reason jika ada (format: "masuk wfa alasan=...")
-        if (preg_match('/alasan=(.+?)(?:\s|$)/i', $originalMessage, $matches)) {
+        // Changed from non-greedy (.+?) to greedy (.+)$ to capture full reason including spaces
+        if (preg_match('/alasan=(.+)$/i', $originalMessage, $matches)) {
             $lateReason = trim($matches[1]);
         }
 
