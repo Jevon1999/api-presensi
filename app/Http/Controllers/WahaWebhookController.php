@@ -354,18 +354,28 @@ class WahaWebhookController extends Controller
             return "ℹ️ Kamu sudah check-out hari ini pada pukul *{$checkOutTime}* WIB.";
         }
 
+        // ⚠️ REQUIREMENT: Checkout requires progress (either from web or from message)
+        // Check if progress already exists from web entry
+        $existingProgress = Progress::where('member_id', $member->id)
+            ->where('tanggal', $today)
+            ->first();
+        
+        // If no progress from web and no progress in message, reject checkout
+        if (!$progressDescription && (!$existingProgress || empty($existingProgress->description))) {
+            return "❌ *Harus isi progress terlebih dahulu!*\n\n" .
+                   "Silakan masuk ke aplikasi web dan isi progress hari ini sebelum checkout.\n\n" .
+                   "Atau gunakan format: *keluar [keterangan progress]*\n\n" .
+                   "Contoh: *keluar Update database dan test API endpoint*";
+        }
+
         // Update check-out time
         $checkOutTime = now()->format('H:i:s');
         $attendance->update([
             'check_out_time' => $checkOutTime
         ]);
 
-        // Save progress if provided (append to existing or create new)
+        // Save progress if provided via message (append to existing or create new)
         if ($progressDescription) {
-            $existingProgress = Progress::where('member_id', $member->id)
-                ->where('tanggal', $today)
-                ->first();
-
             if ($existingProgress) {
                 // Append to existing description
                 $existingProgress->update([
@@ -378,6 +388,10 @@ class WahaWebhookController extends Controller
                     'tipe'        => 'hadir',
                     'description' => $progressDescription,
                 ]);
+                // Update reference to the newly created progress
+                $existingProgress = Progress::where('member_id', $member->id)
+                    ->where('tanggal', $today)
+                    ->first();
             }
             
             Log::info('Progress saved at checkout', [
@@ -393,10 +407,8 @@ class WahaWebhookController extends Controller
         $workingHours = $checkIn->diffInHours($checkOut);
         $workingMinutes = $checkIn->diffInMinutes($checkOut) % 60;
 
-        // Get today's progress from Progress table
-        $progress = Progress::where('member_id', $member->id)
-            ->where('tanggal', $today)
-            ->first();
+        // Use the progress already queried in validation (may have been updated above if new progress added)
+        $progress = $existingProgress;
 
         Log::info('Checkout progress check', [
             'member_id' => $member->id,

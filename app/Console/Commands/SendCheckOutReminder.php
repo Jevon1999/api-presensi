@@ -3,11 +3,11 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\Member;
 use App\Models\Attendance;
 use App\Models\BotConfig;
+use App\Jobs\SendWahaMessage;
 use Carbon\Carbon;
 
 class SendCheckOutReminder extends Command
@@ -84,37 +84,36 @@ class SendCheckOutReminder extends Command
             $template = $config->message_remind_check_out 
                 ?: "🔔 *Reminder Check-out*\n\nHalo {nama}! Jangan lupa untuk check-out sebelum pulang ya.\n\nKetik *keluar* untuk check-out kehadiran.\n\nTerima kasih atas kerja kerasmu hari ini! 🎉";
 
-            $sentCount = 0;
-            $failedCount = 0;
+            $queuedCount = 0;
+            $errorCount = 0;
             
             foreach ($members as $member) {
                 try {
                     $chatId = $this->formatChatId($member->no_hp);
                     $message = str_replace('{nama}', $member->nama_lengkap, $template);
                     
-                    if ($this->sendMessage($config, $chatId, $message)) {
-                        $sentCount++;
-                        Log::info("Check-out reminder sent", ['member' => $member->nama_lengkap]);
-                        $this->info("✓ Reminder sent to: {$member->nama_lengkap}");
-                    } else {
-                        $failedCount++;
-                        Log::warning("Failed to send check-out reminder", ['member' => $member->nama_lengkap]);
-                        $this->error("✗ Failed to send reminder to: {$member->nama_lengkap}");
-                    }
+                    // Queue the message to be sent asynchronously (no blocking HTTP calls)
+                    SendWahaMessage::dispatch($config, $chatId, $message);
+                    
+                    $queuedCount++;
+                    Log::info("Check-out reminder queued", ['member' => $member->nama_lengkap, 'chatId' => $chatId]);
+                    $this->info("✓ Reminder queued for: {$member->nama_lengkap}");
 
-                    // Small delay to avoid overwhelming the API
-                    usleep(500000); // 500ms delay
+                    // Small delay to avoid overwhelming the queue
+                    usleep(100000); // 100ms delay
                 } catch (\Exception $e) {
-                    $failedCount++;
-                    Log::error("Error sending check-out reminder to {$member->nama_lengkap}: " . $e->getMessage());
-                    $this->error("✗ Error sending to {$member->nama_lengkap}: {$e->getMessage()}");
+                    $errorCount++;
+                    Log::error("Error queueing check-out reminder for {$member->nama_lengkap}: " . $e->getMessage(), [
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    $this->error("✗ Error queueing reminder for {$member->nama_lengkap}: {$e->getMessage()}");
                 }
             }
 
-            $this->info("Check-out reminder completed: {$sentCount} sent, {$failedCount} failed.");
-            Log::info("Check-out reminder completed", [
-                'sent' => $sentCount,
-                'failed' => $failedCount,
+            $this->info("Check-out reminder command completed: {$queuedCount} queued, {$errorCount} errors.");
+            Log::info("Check-out reminder command completed", [
+                'queued' => $queuedCount,
+                'errors' => $errorCount,
                 'total' => $members->count()
             ]);
 

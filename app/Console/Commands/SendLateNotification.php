@@ -3,11 +3,11 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\Member;
 use App\Models\Attendance;
 use App\Models\BotConfig;
+use App\Jobs\SendWahaMessage;
 use Carbon\Carbon;
 
 class SendLateNotification extends Command
@@ -74,24 +74,35 @@ class SendLateNotification extends Command
 
         $template = $config->message_error ?: "⚠️ *Notifikasi Keterlambatan*\n\nHalo {nama}! Kamu belum check-in hari ini dan melewati batas waktu telat/alpha.\n\nJika kamu berhalangan hadir, ketik:\n• *izin [alasan]* - untuk izin\n• *sakit [keterangan]* - jika sakit\n\nAtau ketik *masuk* untuk check-in sekarang (akan tercatat terlambat).";
 
-        $sentCount = 0;
+        $queuedCount = 0;
+        $errorCount = 0;
+        
         foreach ($members as $member) {
-            $chatId = $this->formatChatId($member->no_hp);
-            $message = str_replace('{nama}', $member->nama_lengkap, $template);
-            
-            if ($this->sendMessage($config, $chatId, $message)) {
-                $sentCount++;
-                $this->info("Late notification sent to: {$member->nama_lengkap}");
-            } else {
-                $this->error("Failed to send late notification to: {$member->nama_lengkap}");
+            try {
+                $chatId = $this->formatChatId($member->no_hp);
+                $message = str_replace('{nama}', $member->nama_lengkap, $template);
+                
+                // Queue the message to be sent asynchronously (no blocking HTTP calls)
+                SendWahaMessage::dispatch($config, $chatId, $message);
+                
+                $queuedCount++;
+                $this->info("Late notification queued for: {$member->nama_lengkap}");
+            } catch (\Exception $e) {
+                $errorCount++;
+                Log::error("Error queueing late notification for {$member->nama_lengkap}: " . $e->getMessage());
+                $this->error("Error queueing late notification for {$member->nama_lengkap}: {$e->getMessage()}");
             }
 
-            // Small delay to avoid overwhelming the API
-            usleep(500000); // 500ms delay
+            // Small delay to avoid overwhelming the queue
+            usleep(100000); // 100ms delay
         }
 
-        $this->info("Late notification sent to {$sentCount} members.");
-        Log::info("Late notification sent to {$sentCount} members.");
+        $this->info("Late notification command completed: {$queuedCount} queued, {$errorCount} errors.");
+        Log::info("Late notification command completed", [
+            'queued' => $queuedCount,
+            'errors' => $errorCount,
+            'total' => $members->count()
+        ]);
 
         return 0;
     }
