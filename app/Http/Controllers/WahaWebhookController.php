@@ -194,6 +194,11 @@ class WahaWebhookController extends Controller
             return $this->handleSakit($phoneNumber, $reason, $config);
         }
 
+        // Progress command - format: progress [isi] or progress edit [isi] or progress lihat
+        if (preg_match('/^progress\s*/i', $originalMessage) || $message === 'progress') {
+            return $this->handleProgress($phoneNumber, $originalMessage, $config);
+        }
+
         // Help command
         if (in_array($message, ['help', 'bantuan', 'menu', 'mulai', 'start'])) {
             return $this->handleHelp($config);
@@ -355,12 +360,25 @@ class WahaWebhookController extends Controller
             'check_out_time' => $checkOutTime
         ]);
 
-        // Save progress if provided
+        // Save progress if provided (append to existing or create new)
         if ($progressDescription) {
-            Progress::updateOrCreate(
-                ['member_id' => $member->id, 'tanggal' => $today],
-                ['description' => $progressDescription]
-            );
+            $existingProgress = Progress::where('member_id', $member->id)
+                ->where('tanggal', $today)
+                ->first();
+
+            if ($existingProgress) {
+                // Append to existing description
+                $existingProgress->update([
+                    'description' => $existingProgress->description . "\n" . $progressDescription
+                ]);
+            } else {
+                Progress::create([
+                    'member_id'   => $member->id,
+                    'tanggal'     => $today,
+                    'tipe'        => 'hadir',
+                    'description' => $progressDescription,
+                ]);
+            }
             
             Log::info('Progress saved at checkout', [
                 'member_id' => $member->id,
@@ -516,6 +534,12 @@ class WahaWebhookController extends Controller
         $message .= "    └ Format: keluar [keterangan pekerjaan hari ini]\n";
         $message .= "    └ Contoh: keluar membuat laporan web\n\n";
         
+        $message .= "📋 *progress* _[laporan kegiatan]_\n";
+        $message .= "    └ Input progress harian (sebelum checkout)\n";
+        $message .= "    └ Contoh: progress Membuat API login\n";
+        $message .= "    └ *progress lihat* — Lihat progress hari ini\n";
+        $message .= "    └ *progress hapus* — Hapus progress hari ini\n\n";
+        
         $message .= "📊 *status*\n";
         $message .= "    └ Cek status kehadiran hari ini\n\n";
         
@@ -530,6 +554,127 @@ class WahaWebhookController extends Controller
         
         $message .= "━━━━━━━━━━━━━━━━━━━━━\n";
         $message .= "💡 *Alias:* _checkin, checkout, absen, pulang, cek, info_";
+
+        return $message;
+    }
+
+    /**
+     * Handle progress command
+     * Commands:
+     *   progress lihat          - View today's progress
+     *   progress hapus          - Delete today's progress
+     *   progress [description]  - Input/append progress
+     */
+    private function handleProgress($phoneNumber, $originalMessage, $config)
+    {
+        // Find member
+        $memberCheck = $this->getMemberOrErrorMessage($phoneNumber);
+        if (!$memberCheck['success']) {
+            return $memberCheck['message'];
+        }
+        $member = $memberCheck['member'];
+
+        $today = now()->format('Y-m-d');
+
+        // Check attendance status
+        $attendance = Attendance::where('member_id', $member->id)
+            ->where('tanggal', $today)
+            ->first();
+
+        // Parse sub-command
+        $body = trim(preg_replace('/^progress\s*/i', '', $originalMessage));
+        $subCommand = strtolower($body);
+
+        // === progress lihat ===
+        if ($subCommand === 'lihat' || $subCommand === 'view') {
+            $progress = Progress::where('member_id', $member->id)
+                ->where('tanggal', $today)
+                ->first();
+
+            if (!$progress) {
+                return "📝 *Progress Hari Ini*\n\nBelum ada progress yang tercatat untuk hari ini.\n\nKetik *progress [isi kegiatan]* untuk menambahkan.";
+            }
+
+            $tipeLabel = match($progress->tipe) {
+                'hadir' => '✅ Hadir',
+                'sakit' => '🏥 Sakit',
+                'izin'  => '📋 Izin',
+                default => $progress->tipe,
+            };
+
+            $message = "📝 *Progress Hari Ini*\n\n";
+            $message .= "Tipe: {$tipeLabel}\n";
+            $message .= "Tanggal: " . now()->format('d/m/Y') . "\n\n";
+            $message .= "{$progress->description}";
+
+            return $message;
+        }
+
+        // === progress hapus ===
+        if ($subCommand === 'hapus' || $subCommand === 'delete') {
+            if (!$attendance || !$attendance->check_in_time) {
+                return "🔒 Kamu belum check-in hari ini. Progress tidak bisa dihapus.";
+            }
+            if ($attendance->check_out_time) {
+                return "🔒 Kamu sudah checkout. Progress tidak bisa dihapus setelah checkout.";
+            }
+
+            $progress = Progress::where('member_id', $member->id)
+                ->where('tanggal', $today)
+                ->first();
+
+            if (!$progress) {
+                return "❌ Tidak ada progress untuk hari ini yang bisa dihapus.";
+            }
+
+            $progress->delete();
+            return "🗑️ *Progress hari ini berhasil dihapus.*\n\nKetik *progress [isi kegiatan]* untuk menambahkan ulang.";
+        }
+
+        // === progress [description] - Input/append ===
+        if (empty($body)) {
+            return "⚠️ *Format Progress:*\n\n*progress [laporan kegiatan]*\n\nContoh:\n*progress Membuat API login dan register*\n*progress Fixing bug halaman dashboard*\n\n💡 Perintah lain:\n*progress lihat* — Lihat progress hari ini\n*progress hapus* — Hapus progress hari ini";
+        }
+
+        // Must be checked-in and not checked-out
+        if (!$attendance || !$attendance->check_in_time) {
+            return "🔒 *Belum Check-in*\n\nKamu harus check-in terlebih dahulu sebelum menginput progress.\n\nKetik *masuk wfo* atau *masuk wfa* untuk check-in.";
+        }
+        if ($attendance->check_out_time) {
+            return "🔒 *Sudah Checkout*\n\nProgress tidak bisa ditambah/diubah setelah checkout.";
+        }
+
+        // Check existing progress
+        $existingProgress = Progress::where('member_id', $member->id)
+            ->where('tanggal', $today)
+            ->first();
+
+        if ($existingProgress) {
+            // Append to existing
+            $existingProgress->update([
+                'description' => $existingProgress->description . "\n" . $body
+            ]);
+
+            $message = "✅ *Progress Ditambahkan!*\n\n";
+            $message .= "Nama: *{$member->nama_lengkap}*\n";
+            $message .= "Tanggal: " . now()->format('d/m/Y') . "\n\n";
+            $message .= "📝 *Progress Lengkap:*\n{$existingProgress->description}";
+            $message .= "\n\n💡 Ketik *progress [isi]* lagi untuk menambah, atau *progress lihat* untuk melihat.";
+        } else {
+            // Create new
+            Progress::create([
+                'member_id'   => $member->id,
+                'tanggal'     => $today,
+                'tipe'        => 'hadir',
+                'description' => $body,
+            ]);
+
+            $message = "✅ *Progress Tersimpan!*\n\n";
+            $message .= "Nama: *{$member->nama_lengkap}*\n";
+            $message .= "Tanggal: " . now()->format('d/m/Y') . "\n\n";
+            $message .= "📝 *Progress:*\n{$body}";
+            $message .= "\n\n💡 Ketik *progress [isi]* lagi untuk menambah, atau *progress lihat* untuk melihat.";
+        }
 
         return $message;
     }

@@ -42,6 +42,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Member own dashboard (for approved members)
     Route::get('/member/dashboard', [MemberDashboardController::class, 'dashboard']);
     Route::get('/member/progress', [MemberDashboardController::class, 'progress']);
+    Route::post('/member/progress', [MemberDashboardController::class, 'storeProgress']);
+    Route::put('/member/progress/{id}', [MemberDashboardController::class, 'updateProgress']);
+    Route::delete('/member/progress/{id}', [MemberDashboardController::class, 'destroyProgress']);
     Route::get('/member/report', [MemberDashboardController::class, 'report']);
 
     // Admin: specific operations
