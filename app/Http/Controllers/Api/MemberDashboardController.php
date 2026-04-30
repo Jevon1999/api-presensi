@@ -139,6 +139,7 @@ class MemberDashboardController extends Controller
 
     /**
      * Store a new progress record for the authenticated member.
+     * Members can only input tipe=hadir (work report). Multiple per day allowed.
      */
     public function storeProgress(Request $request)
     {
@@ -153,39 +154,20 @@ class MemberDashboardController extends Controller
         }
 
         $validated = $request->validate([
-            'tipe'        => 'required|in:hadir,sakit,izin',
-            'description' => [
-                'required',
-                'string',
-                'min:3',
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($request->tipe === 'sakit' && trim($value) === 'Pulang') {
-                        $fail('Keterangan sakit harus diisi dengan alasan yang sesuai.');
-                    }
-                },
-            ],
+            'description' => 'required|string|min:3',
         ]);
 
         $today = Carbon::today()->toDateString();
 
-        // Check if progress already exists for today
-        $exists = Progress::where('member_id', $member->id)
-            ->where('tanggal', $today)
-            ->exists();
-
-        if ($exists) {
-            return response()->json(['message' => 'Laporan untuk hari ini sudah ada. Silakan edit laporan yang sudah ada.'], 422);
-        }
-
         $progress = Progress::create([
             'member_id'   => $member->id,
             'tanggal'     => $today,
-            'tipe'        => $validated['tipe'],
+            'tipe'        => 'hadir',
             'description' => $validated['description'],
         ]);
 
         return response()->json([
-            'message' => 'Laporan berhasil disimpan.',
+            'message' => 'Progress berhasil disimpan.',
             'data'    => $progress,
         ], 201);
     }

@@ -65,7 +65,7 @@ class ProgressController extends Controller
             $query->where('tipe', $request->tipe);
         }
 
-        $progresses = $query->latest('tanggal')->paginate(10);
+        $progresses = $query->latest('tanggal')->paginate(50);
         return response()->json($progresses);
     }
 
@@ -119,14 +119,6 @@ class ProgressController extends Controller
         // Jika izin dan description kosong/default, set ke "Pulang"
         if ($validated['tipe'] === 'izin' && empty(trim($validated['description']))) {
             $validated['description'] = 'Pulang';
-        }
-
-        $exists = Progress::where('member_id', $validated['member_id'])
-            ->where('tanggal', $validated['tanggal'])
-            ->exists();
-
-        if ($exists) {
-            return response()->json(['message' => 'Laporan untuk tanggal ini sudah ada.'], 422);
         }
 
         $progress = Progress::create($validated);
