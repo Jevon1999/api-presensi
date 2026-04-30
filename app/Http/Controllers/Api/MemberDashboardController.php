@@ -94,7 +94,7 @@ class MemberDashboardController extends Controller
 
         // Today's attendance for lock-state
         $todayAttendance = Attendance::where('member_id', $member->id)
-            ->whereDate('tanggal', Carbon::today())
+            ->where('tanggal', now()->toDateString())
             ->first();
 
         // Merge today_attendance into paginated response
@@ -123,7 +123,7 @@ class MemberDashboardController extends Controller
     private function checkProgressLock($member)
     {
         $attendance = Attendance::where('member_id', $member->id)
-            ->whereDate('tanggal', Carbon::today())
+            ->where('tanggal', now()->toDateString())
             ->first();
 
         if (!$attendance || !$attendance->check_in_time) {
@@ -157,7 +157,7 @@ class MemberDashboardController extends Controller
             'description' => 'required|string|min:3',
         ]);
 
-        $today = Carbon::today()->toDateString();
+        $today = now()->toDateString();
 
         $progress = Progress::create([
             'member_id'   => $member->id,
@@ -191,7 +191,7 @@ class MemberDashboardController extends Controller
         }
 
         // Members can only edit today's progress
-        if (!$progress->tanggal->isToday()) {
+        if ($progress->tanggal->format('Y-m-d') !== now()->toDateString()) {
             return response()->json(['message' => 'Hanya bisa mengedit progress hari ini.'], 403);
         }
 
@@ -232,7 +232,7 @@ class MemberDashboardController extends Controller
         }
 
         // Members can only delete today's progress
-        if (!$progress->tanggal->isToday()) {
+        if ($progress->tanggal->format('Y-m-d') !== now()->toDateString()) {
             return response()->json(['message' => 'Hanya bisa menghapus progress hari ini.'], 403);
         }
 
