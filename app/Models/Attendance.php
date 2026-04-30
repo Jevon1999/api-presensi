@@ -15,7 +15,7 @@ class Attendance extends Model
     ];
 
     protected $casts = [
-        'tanggal' => 'date',
+        'tanggal' => 'date:Y-m-d',
         'check_in_time' => 'datetime:H:i:s',
         'check_out_time' => 'datetime:H:i:s',
         'is_late' => 'boolean'
